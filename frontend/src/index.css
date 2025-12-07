@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 全局样式：让字号默认大一点，照顾车间环境 */
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background-color: #f3f4f6;
+}

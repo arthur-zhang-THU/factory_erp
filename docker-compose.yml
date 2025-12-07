@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=factory_admin
+      - POSTGRES_PASSWORD=factory_pass
+      - POSTGRES_DB=factory_db
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    container_name: factory_backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://factory_admin:factory_pass@db/factory_db
+    depends_on:
+      - db
+
+  # --- [新增] 前端服务 ---
+  frontend:
+    build: ./frontend
+    container_name: factory_frontend
+    volumes:
+      - ./frontend:/app
+      # 排除 node_modules 目录，防止宿主机和容器环境冲突
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    # 前端需要等后端启动后再启动吗？其实不用，因为它们是在浏览器端交互的
+    # 但加上 restart 可以防止启动报错退出
+    restart: always
+
+volumes:
+  postgres_data:
