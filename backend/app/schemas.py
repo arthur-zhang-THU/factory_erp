@@ -60,3 +60,27 @@ class BOMItemResponse(BaseSchema):
     material_std_cost: float | None # 方便前端算预估成本
     qty_per: float
     scrap_rate: float
+    
+# --- Work Order Schemas (生产工单) ---
+from datetime import date
+from enum import Enum
+
+class WOStatus(str, Enum):
+    PLANNED = "PLANNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+
+class WorkOrderCreate(BaseSchema):
+    project_id: int
+    qty: int = 1  # 计划生产数量
+    planned_start: Optional[date] = None
+    planned_end: Optional[date] = None
+
+class WorkOrderResponse(BaseSchema):
+    id: int
+    project_id: int
+    project_name: str | None # 方便前端显示
+    status: WOStatus
+    qty: int | None          # 对应数据库里可能没有这个字段，如果模型没改，暂时忽略
+    planned_start: date | None
+    planned_end: date | None

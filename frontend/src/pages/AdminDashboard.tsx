@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Layout, Menu, Button, theme, Card } from 'antd';
 import { DatabaseOutlined, DashboardOutlined, ProjectOutlined } from '@ant-design/icons';
 import CreateMaterialModal from '../components/CreateMaterialModal'; 
-// ⬇️ 1. 引入刚才写好的项目组件
 import ProjectManager from '../components/ProjectManager';
+import { SolutionOutlined } from '@ant-design/icons'; // 找个图标
+import WorkOrderManager from '../components/WorkOrderManager'; // 引入组件
 
 const { Header, Sider, Content } = Layout;
 
@@ -12,7 +13,6 @@ const AdminDashboard: React.FC = () => {
   // ⬇️ 2. 新增状态：记录当前选中的菜单 Key (默认选 '2' 项目管理)
   const [activeMenu, setActiveMenu] = useState('2'); 
   const [isCreateMatOpen, setIsCreateMatOpen] = useState(false);
-  
   const { token: { colorBgContainer, borderRadiusLG } } = theme.useToken();
 
   // ⬇️ 3. 渲染内容的逻辑函数
@@ -35,6 +35,8 @@ const AdminDashboard: React.FC = () => {
         return <ProjectManager />;
       default:
         return <div>🚧 报表分析功能正在开发中 (Coming Soon)</div>;
+      case '3': // 生产执行 (WO)
+        return <WorkOrderManager />;
     }
   };
 
@@ -52,7 +54,8 @@ const AdminDashboard: React.FC = () => {
           items={[
             { key: '1', icon: <DatabaseOutlined />, label: '基础数据' },
             { key: '2', icon: <ProjectOutlined />, label: '项目管理' },
-            { key: '3', icon: <DashboardOutlined />, label: '报表分析' },
+            { key: '4', icon: <DashboardOutlined />, label: '报表分析' },
+            { key: '3', icon: <SolutionOutlined />, label: '生产执行 (WO)' },
           ]} 
         />
       </Sider>

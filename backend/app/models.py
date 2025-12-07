@@ -43,6 +43,7 @@ class WorkOrder(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     status = Column(Enum(WOStatus), default=WOStatus.PLANNED)
     planned_start = Column(Date)
+    planned_end = Column(Date)
     
     # 关联关系
     project = relationship("Project", back_populates="work_orders")
