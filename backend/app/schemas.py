@@ -21,3 +21,42 @@ class InventoryTxnResponse(BaseSchema):
     qty: float
     current_stock: float # 计算后的当前库存
     created_at: datetime
+    
+# --- Project Schemas (项目相关) ---
+from datetime import date
+from typing import Optional, List
+
+# 1. 创建项目时，前端需要传什么？
+class ProjectCreate(BaseSchema):
+    name: str
+    customer_name: str
+    sign_type: str = "灯箱"  # 默认值
+    due_date: Optional[date] = None
+
+# 2. 返回给前端时，数据长什么样？
+class ProjectResponse(BaseSchema):
+    id: int
+    name: str
+    customer_name: str | None
+    sign_type: str | None
+    due_date: date | None
+    # 状态字段后面再加，先跑通基础的
+    
+# --- BOM Schemas (物料清单) ---
+
+# 1. 往 BOM 里加料时，前端传什么？
+class BOMItemCreate(BaseSchema):
+    material_id: int
+    qty_per: float  # 单个产品需要的数量
+    scrap_rate: float = 0.0  # 损耗率 (例如 0.1 代表 10%)
+
+# 2. 返回 BOM 列表时，数据长什么样？
+# 我们需要把 material 的 name 也带出来，不然前端只显示 ID 没人看得懂
+class BOMItemResponse(BaseSchema):
+    id: int
+    material_id: int
+    material_name: str | None  # 方便前端显示
+    material_spec: str | None
+    material_std_cost: float | None # 方便前端算预估成本
+    qty_per: float
+    scrap_rate: float

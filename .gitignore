@@ -33,3 +33,5 @@ Thumbs.db
 # --- Docker ---
 # 不上传 docker 里的临时数据
 docker-data/
+
+开发计划.txt

@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy import text
-from app.routers import inventory
-from app.database import engine # <--- 改为从 database 导入
+from app.routers import inventory, projects , bom
+from app.database import engine 
 from app.models import Base
 
 # 生命周期管理
@@ -42,6 +42,8 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(inventory.router)
+app.include_router(projects.router)
+app.include_router(bom.router)
 
 @app.get("/")
 async def root():
