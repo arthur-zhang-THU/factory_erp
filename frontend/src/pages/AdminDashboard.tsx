@@ -5,6 +5,7 @@ import CreateMaterialModal from '../components/CreateMaterialModal';
 import ProjectManager from '../components/ProjectManager';
 import { SolutionOutlined } from '@ant-design/icons'; // 找个图标
 import WorkOrderManager from '../components/WorkOrderManager'; // 引入组件
+import BIReport from '../components/BIReport';
 
 const { Header, Sider, Content } = Layout;
 
@@ -37,6 +38,8 @@ const AdminDashboard: React.FC = () => {
         return <div>🚧 报表分析功能正在开发中 (Coming Soon)</div>;
       case '3': // 生产执行 (WO)
         return <WorkOrderManager />;
+      case '4': // 报表分析
+        return <BIReport />;
     }
   };
 

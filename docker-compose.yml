@@ -29,15 +29,15 @@ services:
   frontend:
     build: ./frontend
     container_name: factory_frontend
+    ports:
+      - "3000:3000" # 员工访问 localhost:3000
     volumes:
       - ./frontend:/app
-      # 排除 node_modules 目录，防止宿主机和容器环境冲突
-      - /app/node_modules
-    ports:
-      - "3000:3000"
-    # 前端需要等后端启动后再启动吗？其实不用，因为它们是在浏览器端交互的
-    # 但加上 restart 可以防止启动报错退出
-    restart: always
+      - /app/node_modules # 避免本地 node_modules 冲突
+    environment:
+      - VITE_API_URL=http://localhost:8000 # 告诉前端后端在哪里
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
