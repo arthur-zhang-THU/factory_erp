@@ -6,6 +6,8 @@ import ProjectManager from '../components/ProjectManager';
 import { SolutionOutlined } from '@ant-design/icons'; // 找个图标
 import WorkOrderManager from '../components/WorkOrderManager'; // 引入组件
 import BIReport from '../components/BIReport';
+import PurchasingDashboard from '../components/PurchasingDashboard';
+import { ShoppingCartOutlined } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
 
@@ -40,6 +42,8 @@ const AdminDashboard: React.FC = () => {
         return <WorkOrderManager />;
       case '4': // 报表分析
         return <BIReport />;
+      case '5': // 采购缺料
+        return <PurchasingDashboard />;
     }
   };
 
@@ -58,7 +62,8 @@ const AdminDashboard: React.FC = () => {
             { key: '1', icon: <DatabaseOutlined />, label: '基础数据' },
             { key: '2', icon: <ProjectOutlined />, label: '项目管理' },
             { key: '4', icon: <DashboardOutlined />, label: '报表分析' },
-            { key: '3', icon: <SolutionOutlined />, label: '生产执行 (WO)' },
+            { key: '3', icon: <SolutionOutlined />, label: '生产执行' },
+            { key: '5', icon: <ShoppingCartOutlined />, label: '采购缺料' },
           ]} 
         />
       </Sider>
