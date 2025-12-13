@@ -14,6 +14,7 @@ class TxnType(str, enum.Enum):
     IN = "IN"   # 入库
     OUT = "OUT" # 出库 (领料)
     ADJ = "ADJ" # 盘点调整
+    SCRAP = "SCRAP"# 报废
 
 class WOStatus(str, enum.Enum):
     PLANNED = "PLANNED"

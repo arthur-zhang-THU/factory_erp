@@ -9,6 +9,9 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/inventory", tags=["库存管理(Inventory)"])
 
+# 引入 or_ 用于逻辑判断，或者直接用 in_
+from sqlalchemy import or_
+
 @router.post("/scan", response_model=InventoryTxnResponse, summary="工人扫码录入接口")
 async def scan_material(
     request: MaterialScanRequest, 
@@ -17,15 +20,34 @@ async def scan_material(
     """
     处理工人扫码：
     1. 校验物料是否存在
-    2. 记录流水 (Txn)
-    3. 实时计算当前库存
+    2. 🛡️ [新增] 检查库存是否充足 (针对 OUT/SCRAP)
+    3. 记录流水
+    4. 实时计算当前库存
     """
     # 1. 检查物料是否存在
     material = await db.get(Material, request.material_id)
     if not material:
         raise HTTPException(status_code=404, detail="找不到该物料 (ID错误)")
 
-    # 2. 创建流水记录
+    # 2. 检查：如果是扣减操作，先算算够不够
+    if request.txn_type in ['OUT', 'SCRAP']:
+        # 先查询历史库存总和
+        stmt_check = select(func.sum(
+            case(
+                # IN 和 ADJ(假设是盘盈) 为正，OUT 和 SCRAP 为负
+                (InventoryTxn.txn_type.in_(['OUT', 'SCRAP']), -InventoryTxn.qty), 
+                else_=InventoryTxn.qty
+            )
+        )).where(InventoryTxn.material_id == request.material_id)
+        
+        result_check = await db.execute(stmt_check)
+        current_stock_before = result_check.scalar() or 0.0
+
+        if current_stock_before < request.qty:
+            op_name = "领料" if request.txn_type == 'OUT' else "报废"
+            raise HTTPException(status_code=400, detail=f"库存不足！当前只有 {current_stock_before}，无法{op_name} {request.qty}")
+
+    # 3. 创建流水记录
     new_txn = InventoryTxn(
         material_id=request.material_id,
         txn_type=request.txn_type,
@@ -34,28 +56,31 @@ async def scan_material(
     )
     db.add(new_txn)
     
-    # 3. 提交事务 (保存到数据库)
+    # 4. 提交事务
     await db.commit()
     await db.refresh(new_txn)
 
-    # 4. 计算当前总库存 (核心修正部分)
+    # 5. 计算当前总库存 (核心修正部分)
+    # 逻辑更新：OUT 和 SCRAP 都是负数
     stmt = select(func.sum(
         case(
-            (InventoryTxn.txn_type == 'OUT', -InventoryTxn.qty), 
-            else_=InventoryTxn.qty                               
+            # ✅ 修复点：只要是 OUT 或者 SCRAP，都要乘 -1
+            (InventoryTxn.txn_type.in_(['OUT', 'SCRAP']), -InventoryTxn.qty), 
+            else_=InventoryTxn.qty                                
         )
     )).where(InventoryTxn.material_id == request.material_id)
     
     result = await db.execute(stmt)
-    # 如果是第一次入库，result可能是None，所以要 or 0.0
     current_stock = result.scalar() or 0.0
 
-    # 5. 返回结果
+    # 6. 返回结果
     return InventoryTxnResponse(
         id=new_txn.id,
+        material_id=new_txn.material_id, 
         material_name=material.name,
         txn_type=new_txn.txn_type,
         qty=new_txn.qty,
+        wo_id=new_txn.wo_id,
         current_stock=current_stock,
         created_at=new_txn.created_at
     )
@@ -80,18 +105,22 @@ class InventoryStatusDTO(BaseModel):
     spec: str | None
     onhand: float
 
+# 引入需要的库
+from sqlalchemy import case, func, select
+
 @router.get("/status", response_model=List[InventoryStatusDTO], summary="[BI] 实时库存查询")
 async def get_inventory_status(db: AsyncSession = Depends(get_db)):
     """
     对应前端红色按钮“查库存”：
-    使用 SQL 聚合计算：Sum(IN) + Sum(ADJ) - Sum(OUT)
+    使用 SQL 聚合计算：Sum(IN) + Sum(ADJ) - Sum(OUT) - Sum(SCRAP)
     """
     # 1. 构造计算逻辑 (Case When)
-    # 注意：这里使用和你上面 scan_material 一样的字符串判断逻辑
+    # ✅ 修复点：增加了 SCRAP 的判断，并且它是负数（扣减）
     qty_calc = case(
         (InventoryTxn.txn_type == 'IN', InventoryTxn.qty),
         (InventoryTxn.txn_type == 'ADJ', InventoryTxn.qty), 
         (InventoryTxn.txn_type == 'OUT', -InventoryTxn.qty),
+        (InventoryTxn.txn_type == 'SCRAP', -InventoryTxn.qty), # <--- 这一行必须加！
         else_=0
     )
 

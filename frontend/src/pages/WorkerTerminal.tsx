@@ -3,7 +3,7 @@ import axios from 'axios'
 import { 
     PackagePlus, PackageMinus, ScanLine, 
     AlertCircle, CheckCircle2, ArrowLeft, 
-    ClipboardList, PlayCircle, CheckSquare 
+    ClipboardList, PlayCircle, CheckSquare, Trash2 
 } from 'lucide-react'
 import InventoryModal from '../components/InventoryModal'
 
@@ -20,6 +20,7 @@ const BigButton = ({ label, color, icon, onClick }: any) => (
       ${color === 'blue' ? 'bg-blue-500 border-blue-700 text-white' : ''}
       ${color === 'red' ? 'bg-red-500 border-red-700 text-white' : ''}
       ${color === 'orange' ? 'bg-orange-500 border-orange-700 text-white' : ''}
+      ${color === 'rose' ? 'bg-rose-600 border-rose-800 text-white' : ''} 
     `}
   >
     {icon}
@@ -28,24 +29,22 @@ const BigButton = ({ label, color, icon, onClick }: any) => (
 )
 
 export default function WorkerTerminal() {
-  // 🆕 新增 TASKS 模式
   const [mode, setMode] = useState<'HOME' | 'SCAN' | 'TASKS'>('HOME')
-  const [txnType, setTxnType] = useState<'IN' | 'OUT'>('OUT')
+  // 🆕 新增 SCRAP 类型
+  const [txnType, setTxnType] = useState<'IN' | 'OUT' | 'SCRAP'>('OUT')
   
-  // 扫码相关
   const [materialId, setMaterialId] = useState<string>('')
   const [qty, setQty] = useState<string>('')
   
-  // 工单数据
   const [workOrders, setWorkOrders] = useState<any[]>([])
   const [selectedWoId, setSelectedWoId] = useState<string>('')
   
   const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
   const [isInventoryOpen, setIsInventoryOpen] = useState(false)
 
-  // 加载工单 (用于任务列表 或 领料下拉框)
+  // 加载工单 (包括 SCRAP 模式也需要选工单，因为要知道是哪个工单做坏的)
   useEffect(() => {
-    if (mode === 'TASKS' || (mode === 'SCAN' && txnType === 'OUT')) {
+    if (mode === 'TASKS' || (mode === 'SCAN' && (txnType === 'OUT' || txnType === 'SCRAP'))) {
         fetchWorkOrders();
     }
   }, [mode, txnType]);
@@ -53,17 +52,15 @@ export default function WorkerTerminal() {
   const fetchWorkOrders = async () => {
       try {
           const res = await axios.get(`${API_URL}/work_orders/`);
-          // 过滤掉已完成的，只显示待办和进行中
           const activeWos = res.data.filter((w:any) => w.status !== 'COMPLETED');
           setWorkOrders(activeWos);
       } catch (e) { console.error("加载工单失败"); }
   }
 
-  // 状态流转 (专门给 TASKS 模式用)
   const updateStatus = async (woId: number, newStatus: string) => {
       try {
           await axios.patch(`${API_URL}/work_orders/${woId}/status`, { status: newStatus });
-          fetchWorkOrders(); // 刷新列表
+          fetchWorkOrders();
           setStatus({ type: 'success', msg: `✅ 状态已更新` });
           setTimeout(() => setStatus(null), 1500);
       } catch (e: any) {
@@ -73,11 +70,11 @@ export default function WorkerTerminal() {
       }
   }
 
-  // 提交库存变动
   const handleSubmit = async () => {
     if (!qty || !materialId) return
     
-    if (txnType === 'OUT' && !selectedWoId) {
+    // 领料和报废都需要选工单
+    if ((txnType === 'OUT' || txnType === 'SCRAP') && !selectedWoId) {
         setStatus({ type: 'error', msg: '⚠️ 请先选择关联的工单！' });
         return;
     }
@@ -87,19 +84,44 @@ export default function WorkerTerminal() {
         material_id: parseInt(materialId),
         txn_type: txnType,
         qty: parseFloat(qty),
-        wo_id: txnType === 'OUT' ? parseInt(selectedWoId) : null 
+        wo_id: (txnType === 'OUT' || txnType === 'SCRAP') ? parseInt(selectedWoId) : null 
       })
       
-      setStatus({ type: 'success', msg: `✅ 成功！剩余库存: ${res.data.current_stock}` })
+      // 🛡️ 防崩修改：即使后端没返回 current_stock，显示 '未知' 也不要崩
+      const stockShow = res.data.current_stock !== undefined ? res.data.current_stock : '未知';
+      
+      setStatus({ type: 'success', msg: `✅ 提交成功！剩余库存: ${stockShow}` })
       setQty('')
       setMaterialId('')
       setTimeout(() => setStatus(null), 3000)
-    } catch (err: any) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || '操作失败' })
-    }
-  }
 
-  // --- 1. 任务管理界面 (新功能) ---
+    } catch (err: any) {
+      console.error("提交报错:", err); // 在控制台打印详细错误
+      
+      let errorMsg = '操作失败';
+      
+      // 获取后端返回的 detail
+      const detail = err.response?.data?.detail;
+
+      if (detail) {
+          if (typeof detail === 'string') {
+              // 情况 1: 普通字符串报错 (比如我们自己抛出的 HTTPException)
+              errorMsg = detail;
+          } else if (Array.isArray(detail)) {
+              // 情况 2: Pydantic 校验报错 (422)，它是一个数组
+              // 提取里面的 msg 字段拼起来
+              errorMsg = detail.map((item: any) => item.msg).join('; ');
+          } else {
+              // 情况 3: 其他未知对象，强制转字符串，绝不让 React 崩
+              errorMsg = JSON.stringify(detail);
+          }
+      }
+
+      setStatus({ type: 'error', msg: errorMsg });
+    }
+  } // <--- ⚠️ 之前就是这里少了这个花括号，导致报错
+
+  // --- TASKS 模式保持不变 ---
   if (mode === 'TASKS') {
       return (
         <div className="p-4 h-screen flex flex-col bg-slate-100">
@@ -156,16 +178,22 @@ export default function WorkerTerminal() {
       )
   }
 
-  // --- 2. 扫码作业界面 (纯净版) ---
+  // --- SCAN 扫码作业界面 ---
   if (mode === 'SCAN') {
+    // 根据类型决定颜色
+    const bgColor = txnType === 'SCRAP' ? 'bg-rose-50' : 'bg-slate-100';
+    const titleColor = txnType === 'SCRAP' ? 'text-rose-700' : 'text-gray-700';
+
     return (
-      <div className="p-4 h-screen flex flex-col bg-slate-100">
+      <div className={`p-4 h-screen flex flex-col ${bgColor}`}>
         <div className="flex items-center mb-4">
             <button onClick={() => setMode('HOME')} className="p-2 bg-white rounded-xl shadow text-gray-600">
                 <ArrowLeft size={32}/>
             </button>
-            <h1 className="text-2xl font-bold ml-4 text-gray-700 flex-1 text-center">
-            {txnType === 'IN' ? '📦 原材料入库' : '🛠️ 生产领料'}
+            <h1 className={`text-2xl font-bold ml-4 flex-1 text-center ${titleColor}`}>
+                {txnType === 'IN' && '📦 原材料入库'}
+                {txnType === 'OUT' && '🛠️ 生产领料'}
+                {txnType === 'SCRAP' && '🗑️ 登记次品/报废'}
             </h1>
             <div className="w-12"></div>
         </div>
@@ -178,19 +206,21 @@ export default function WorkerTerminal() {
 
         <div className="bg-white p-4 rounded-3xl shadow-sm flex-1 flex flex-col gap-4 overflow-y-auto">
           
-          {/* 领料时选工单，但不再有“开工”按钮，纯粹做选择 */}
-          {txnType === 'OUT' && (
-              <div className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-100">
-                  <label className="block text-lg font-bold text-blue-800 mb-2">🏷️ 选择关联工单</label>
+          {/* 领料或报废，都需要选工单 */}
+          {(txnType === 'OUT' || txnType === 'SCRAP') && (
+              <div className={`${txnType === 'SCRAP' ? 'bg-rose-50 border-rose-100' : 'bg-blue-50 border-blue-100'} p-4 rounded-2xl border-2`}>
+                  <label className={`block text-lg font-bold mb-2 ${txnType === 'SCRAP' ? 'text-rose-800' : 'text-blue-800'}`}>
+                      🏷️ 关联工单
+                  </label>
                   <select 
-                    className="w-full h-16 text-xl bg-white border-2 border-blue-200 rounded-xl px-4 outline-none focus:border-blue-500"
+                    className={`w-full h-16 text-xl bg-white border-2 rounded-xl px-4 outline-none focus:border-blue-500 ${txnType === 'SCRAP' ? 'border-rose-200' : 'border-blue-200'}`}
                     value={selectedWoId}
                     onChange={e => setSelectedWoId(e.target.value)}
                   >
                       <option value="">-- 请选择 --</option>
                       {workOrders.map(wo => (
                           <option key={wo.id} value={wo.id}>
-                              #{wo.id} {wo.project_name} ({wo.status === 'IN_PROGRESS' ? '进行中' : '待开工'})
+                              #{wo.id} {wo.project_name} ({wo.status})
                           </option>
                       ))}
                   </select>
@@ -204,12 +234,12 @@ export default function WorkerTerminal() {
                 value={materialId} 
                 onChange={e => setMaterialId(e.target.value)} 
                 className="w-full h-16 text-3xl text-center border-4 border-gray-200 rounded-xl focus:border-blue-500 outline-none"
-                placeholder="扫码或输入"
+                placeholder="扫码"
             />
           </div>
           
           <div>
-            <label className="block text-lg text-gray-500 mb-1">数量</label>
+            <label className="block text-lg text-gray-500 mb-1">数量 {txnType === 'SCRAP' && '(损耗)'}</label>
             <input 
                 type="number" 
                 value={qty} 
@@ -221,16 +251,17 @@ export default function WorkerTerminal() {
 
           <button 
             onClick={handleSubmit}
-            className="mt-auto w-full h-24 bg-blue-600 text-white text-3xl font-bold rounded-2xl shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
+            className={`mt-auto w-full h-24 text-white text-3xl font-bold rounded-2xl shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3 ${txnType === 'SCRAP' ? 'bg-rose-600' : 'bg-blue-600'}`}
           >
-            <CheckCircle2 size={32} /> 确认提交
+            {txnType === 'SCRAP' ? <Trash2 size={32} /> : <CheckCircle2 size={32} />}
+            {txnType === 'SCRAP' ? '确认报废' : '确认提交'}
           </button>
         </div>
       </div>
     )
   }
 
-  // --- 3. 主页 ---
+  // --- HOME 主页 ---
   return (
     <div className="p-6 h-screen bg-gray-100 flex flex-col justify-center relative">
       <h1 className="text-center text-3xl font-bold text-gray-400 mb-8">🏭 工厂作业终端</h1>
@@ -245,8 +276,14 @@ export default function WorkerTerminal() {
 
       <div className="h-4"></div> {/* 间隔 */}
 
-      <BigButton label="我要领料" color="blue" icon={<PackageMinus size={40} />} onClick={() => { setTxnType('OUT'); setMode('SCAN') }} />
-      <BigButton label="入库登记" color="green" icon={<PackagePlus size={40} />} onClick={() => { setTxnType('IN'); setMode('SCAN') }} />
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <BigButton label="领料" color="blue" icon={<PackageMinus size={40} />} onClick={() => { setTxnType('OUT'); setMode('SCAN') }} />
+        <BigButton label="入库" color="green" icon={<PackagePlus size={40} />} onClick={() => { setTxnType('IN'); setMode('SCAN') }} />
+      </div>
+
+      {/* 🆕 报废按钮 */}
+      <BigButton label="登记次品" color="rose" icon={<Trash2 size={40} />} onClick={() => { setTxnType('SCRAP'); setMode('SCAN') }} />
+      
       <BigButton label="查库存" color="red" icon={<ScanLine size={40} />} onClick={() => setIsInventoryOpen(true)} />
       
       <InventoryModal open={isInventoryOpen} onClose={() => setIsInventoryOpen(false)} />
