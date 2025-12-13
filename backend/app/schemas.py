@@ -67,10 +67,6 @@ class WorkOrderCreate(BaseSchema):
     planned_start: Optional[date] = None
     planned_end: Optional[date] = None
 
-# backend/app/schemas.py
-
-# ... (前面的代码保持不变)
-
 class WorkOrderResponse(BaseSchema):
     id: int
     project_id: int
@@ -81,3 +77,33 @@ class WorkOrderResponse(BaseSchema):
     qty: int = 1 
     planned_start: date | None
     planned_end: date | None
+    
+# --- Finance Schemas ---
+
+class FinanceAccountCreate(BaseSchema):
+    name: str
+    initial_balance: float = 0.0
+
+class FinanceAccountResponse(BaseSchema):
+    id: int
+    name: str
+    balance: float
+
+class TransactionCreate(BaseSchema):
+    account_id: int
+    project_id: int | None = None
+    txn_type: Literal['INCOME', 'EXPENSE']
+    category: str 
+    amount: float
+    description: str | None = None
+    txn_date: date
+
+class TransactionResponse(BaseSchema):
+    id: int
+    account_name: str # 返回账户名，方便显示
+    project_name: str | None
+    txn_type: str
+    category: str
+    amount: float
+    description: str | None
+    txn_date: date

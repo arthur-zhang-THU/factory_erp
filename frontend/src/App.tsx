@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import WorkerTerminal from './pages/WorkerTerminal'
 import AdminDashboard from './pages/AdminDashboard'
+import Finance from './pages/Finance'
 
 function App() {
   return (
@@ -14,6 +15,8 @@ function App() {
         
         {/* 后台路由 */}
         <Route path="/admin" element={<AdminDashboard />} />
+        {/* 财务路由 */}
+        <Route path="/finance" element={<Finance />} />
       </Routes>
     </BrowserRouter>
   )

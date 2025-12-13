@@ -130,3 +130,56 @@ class BOMItem(Base):
 
     header = relationship("BOMHeader", back_populates="items")
     material = relationship("Material", back_populates="bom_items")
+    
+# --- 财务模块 ---
+
+class FinanceAccount(Base):
+    """资金账户：比如 '对公账户', '老板微信', '现金'"""
+    __tablename__ = "finance_accounts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False, unique=True, comment="账户名称")
+    balance = Column(Numeric(12, 2), default=0.00, comment="当前余额")
+    
+    # Relationships
+    transactions = relationship("FinanceTransaction", back_populates="account")
+
+# Define Enums using Python's standard library
+class TransactionType(str, enum.Enum):
+    INCOME = "INCOME"   # 收入 (收款)
+    EXPENSE = "EXPENSE" # 支出 (付款)
+    TRANSFER = "TRANSFER" # 转账
+
+class FinanceCategory(str, enum.Enum):
+    # Income
+    SALES = "SALES"           # 销售回款
+    OTHER_IN = "OTHER_IN"     # 其他收入
+    # Expense
+    PROCUREMENT = "PROCUREMENT" # 采购原材料
+    SALARY = "SALARY"         # 工资
+    RENT = "RENT"             # 房租水电
+    LOGISTICS = "LOGISTICS"   # 物流运费
+    MEALS = "MEALS"           # 伙食费/招待
+    OTHER_OUT = "OTHER_OUT"   # 其他支出
+
+class FinanceTransaction(Base):
+    """财务流水表"""
+    __tablename__ = "finance_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("finance_accounts.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, comment="关联项目(可选)")
+    
+    # ✅ FIX: Use SAEnum here instead of Enum
+    txn_type = Column(SAEnum(TransactionType), nullable=False)
+    category = Column(SAEnum(FinanceCategory), nullable=False)
+    
+    amount = Column(Numeric(12, 2), nullable=False, comment="金额")
+    description = Column(String(200), comment="备注说明")
+    txn_date = Column(Date, nullable=False, comment="发生日期")
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    account = relationship("FinanceAccount", back_populates="transactions")
+    project = relationship("Project") # Unidirectional is fine
