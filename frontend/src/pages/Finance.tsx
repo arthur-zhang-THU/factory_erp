@@ -121,7 +121,11 @@ export default function Finance() {
             <Landmark className="text-blue-600" size={32}/> 
             企业资金看板
           </h1>
-          <p className="text-slate-500 mt-1">管理公司的每一个铜板</p>
+          <p className="text-slate-500 mt-1">管理公司的每一笔进出</p>
+          {/* 🆕 新增入口按钮 */}
+          <a href="/invoices" className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1">
+              跳转至 应收应付 (AR/AP) &rarr;
+          </a>
         </div>
         <div className="text-right">
           <div className="text-sm text-slate-400">当前总资产</div>

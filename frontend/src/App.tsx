@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import WorkerTerminal from './pages/WorkerTerminal'
 import AdminDashboard from './pages/AdminDashboard'
 import Finance from './pages/Finance'
+import Invoices from './pages/Invoices'
 
 function App() {
   return (
@@ -17,6 +18,8 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         {/* 财务路由 */}
         <Route path="/finance" element={<Finance />} />
+        {/* 发票路由 */}
+        <Route path="/invoices" element={<Invoices />} />
       </Routes>
     </BrowserRouter>
   )

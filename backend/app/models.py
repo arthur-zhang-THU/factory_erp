@@ -183,3 +183,37 @@ class FinanceTransaction(Base):
     # Relationships
     account = relationship("FinanceAccount", back_populates="transactions")
     project = relationship("Project") # Unidirectional is fine
+    
+# --- AR/AP (Invoices) ---
+
+class InvoiceType(str, enum.Enum):
+    RECEIVABLE = "RECEIVABLE" # 应收
+    PAYABLE = "PAYABLE"       # 应付
+
+class InvoiceStatus(str, enum.Enum):
+    UNPAID = "UNPAID"   # 待支付
+    PARTIAL = "PARTIAL" # 部分支付
+    PAID = "PAID"       # 已结清
+
+class FinanceInvoice(Base):
+    """应收/应付单据 (欠条)"""
+    __tablename__ = "finance_invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, comment="关联项目")
+    
+    # 比如：应收-万达项目款，应付-xx板材款
+    title = Column(String(100), nullable=False, comment="账单标题")
+    
+    # ✅ FIX: Use SAEnum here instead of Enum
+    inv_type = Column(SAEnum(InvoiceType), nullable=False)
+    status = Column(SAEnum(InvoiceStatus), default=InvoiceStatus.UNPAID)
+    
+    total_amount = Column(Numeric(12, 2), nullable=False, comment="应收/应付总额")
+    paid_amount = Column(Numeric(12, 2), default=0.00, comment="已收/已付金额")
+    
+    due_date = Column(Date, nullable=True, comment="最晚付款日")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    project = relationship("Project")

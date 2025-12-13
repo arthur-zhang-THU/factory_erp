@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, computed_field
 from typing import Literal, Optional, List
 from datetime import datetime, date
 from enum import Enum
@@ -107,3 +107,37 @@ class TransactionResponse(BaseSchema):
     amount: float
     description: str | None
     txn_date: date
+    
+# --- Invoice Schemas ---
+
+class InvoiceCreate(BaseSchema):
+    project_id: int | None = None
+    title: str
+    inv_type: Literal['RECEIVABLE', 'PAYABLE']
+    total_amount: float
+    due_date: date | None = None
+
+class InvoiceResponse(BaseSchema):
+    id: int
+    title: str
+    inv_type: str
+    status: str
+    total_amount: float
+    paid_amount: float
+    due_date: date | None
+    created_at: datetime
+    
+    # 使用 @computed_field 自动从关联对象获取名字
+    @computed_field
+    def project_name(self) -> str | None:
+        # 如果有 project 对象，就返回 project.name，否则返回 None
+        if hasattr(self, 'project') and self.project:
+            return self.project.name
+        return None
+
+# 用于核销的请求 (还款)
+class InvoicePayment(BaseSchema):
+    account_id: int # 用哪个账户收/付的钱
+    amount: float   # 这次还了多少
+    description: str | None = None
+    payment_date: date
