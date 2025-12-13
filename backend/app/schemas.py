@@ -11,7 +11,7 @@ class BaseSchema(BaseModel):
 class MaterialScanRequest(BaseSchema):
     material_id: int = Field(..., description="物料ID")
     # ✅ 修复点：这里补上了 'SCRAP'
-    txn_type: Literal['IN', 'OUT', 'ADJ', 'SCRAP'] = Field(..., description="操作类型")
+    txn_type: Literal['IN', 'OUT', 'ADJ', 'SCRAP', 'REWORK'] = Field(..., description="操作类型")
     qty: float = Field(..., gt=0, description="数量")
     wo_id: Optional[int] = Field(None, description="关联工单ID")
 
@@ -67,11 +67,17 @@ class WorkOrderCreate(BaseSchema):
     planned_start: Optional[date] = None
     planned_end: Optional[date] = None
 
+# backend/app/schemas.py
+
+# ... (前面的代码保持不变)
+
 class WorkOrderResponse(BaseSchema):
     id: int
     project_id: int
     project_name: str | None
-    status: WOStatus
-    qty: int | None = 1
+    status: WOStatus   
+    wo_type: str = "STANDARD"  # 告诉前端这是普通单还是返工单
+    parent_id: int | None = None # 如果是返工单，显示它的父级ID
+    qty: int = 1 
     planned_start: date | None
     planned_end: date | None
