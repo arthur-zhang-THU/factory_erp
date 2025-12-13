@@ -141,3 +141,20 @@ class InvoicePayment(BaseSchema):
     amount: float   # 这次还了多少
     description: str | None = None
     payment_date: date
+    
+# --- Auth Schemas ---
+
+class UserCreate(BaseSchema):
+    username: str
+    password: str
+    role: str = "WORKER" # 默认是工人
+
+class UserResponse(BaseSchema):
+    id: int
+    username: str
+    role: str
+    is_active: bool
+
+class Token(BaseSchema):
+    access_token: str
+    token_type: str

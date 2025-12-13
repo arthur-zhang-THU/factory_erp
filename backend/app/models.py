@@ -1,6 +1,6 @@
 # backend/app/models.py
 
-from sqlalchemy import Column, Integer, String, Date, ForeignKey, Numeric, DateTime, Enum as SAEnum, Text
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, Numeric, DateTime, Enum as SAEnum, Text, Boolean
 from sqlalchemy.orm import relationship, DeclarativeBase, backref
 from sqlalchemy.sql import func
 import enum
@@ -217,3 +217,23 @@ class FinanceInvoice(Base):
 
     # Relationships
     project = relationship("Project")
+
+# --- 用户权限系统 (Auth) ---
+
+class UserRole(str, enum.Enum):
+    ADMIN = "ADMIN"       # 老板：全权 + 用户管理
+    DESIGNER = "DESIGNER" # 设计师：除财务外的后台权限
+    WORKER = "WORKER"     # 工人：仅限车间终端
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    # ⚠️ 注意：这里存的是加密后的哈希值，不是明文密码！
+    hashed_password = Column(String(100), nullable=False)
+    role = Column(SAEnum(UserRole), default=UserRole.WORKER)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
