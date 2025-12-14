@@ -66,17 +66,6 @@ class WorkOrderCreate(BaseSchema):
     qty: int = 1
     planned_start: Optional[date] = None
     planned_end: Optional[date] = None
-
-class WorkOrderResponse(BaseSchema):
-    id: int
-    project_id: int
-    project_name: str | None
-    status: WOStatus   
-    wo_type: str = "STANDARD"  # 告诉前端这是普通单还是返工单
-    parent_id: int | None = None # 如果是返工单，显示它的父级ID
-    qty: int = 1 
-    planned_start: date | None
-    planned_end: date | None
     
 # --- Finance Schemas ---
 
@@ -158,3 +147,27 @@ class UserResponse(BaseSchema):
 class Token(BaseSchema):
     access_token: str
     token_type: str
+    
+# --- Step Schemas ---
+class StepCreate(BaseSchema):
+    name: str
+    assigned_to: int | None = None # 选填工人ID
+
+class StepResponse(BaseSchema):
+    id: int
+    name: str
+    sequence: int
+    assigned_to: int | None
+    status: str
+    
+class WorkOrderResponse(BaseSchema):
+    id: int
+    project_id: int
+    project_name: str | None
+    status: WOStatus   
+    wo_type: str = "STANDARD"  # 告诉前端这是普通单还是返工单
+    parent_id: int | None = None # 如果是返工单，显示它的父级ID
+    qty: int = 1 
+    planned_start: date | None
+    planned_end: date | None
+    steps: List['StepResponse'] = []

@@ -1,58 +1,88 @@
-# 🏭 Factory ERP (轻量级工厂管理系统)
+# 🏭 Factory ERP (SaaS Lite)
 
-这是一个基于 **FastAPI (后端)** 和 **React (前端)** 开发的现代化工厂 ERP 系统。
-专为中小型制造企业设计，涵盖了从**项目接单、BOM设计、生产排程、质量控制(QC)** 到 **财务核算** 的全流程闭环管理。
+一个专为中小型制造工厂（如广告制作、组装加工）设计的极简 ERP 系统。
+支持 **进销存管理**、**生产工序流转**、**计件/派工管理** 以及 **财务资金看板**。
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![React](https://img.shields.io/badge/react-18-blue)
-![Docker](https://img.shields.io/badge/docker-compose-green)
+## 🚀 核心功能 (Features)
 
-## ✨ 核心功能 (Core Features)
+### 1. 🛠 生产执行 (MES & Production)
+* **工序流转 (Process Flow):** 支持自定义工艺路线（如：激光切割 -> 围边 -> 组装）。
+* **自动流转:** 上一道工序完工后，自动解锁下一道工序，推送到对应工人的任务列表。
+* **派工管理:** 老板/设计师可指派特定工人，或发布到公共池抢单。
+* **返工/报废:** 支持生产过程中的异常处理，一键生成返工单。
 
-### 1. 🛠 生产管理 (Manufacturing)
-- **工单管理 (WO):** 支持标准工单创建、状态流转 (待开工 -> 进行中 -> 完工)。
-- **质量控制 (QC):**
-  - **返工 (Rework):** 支持对次品生成关联的子工单，自动追溯来源。
-  - **报废 (Scrap):** 一键登记次品，自动扣减库存并计入损耗成本。
-- **工艺路线:** 自动生成生产步骤 (CNC -> 打印 -> 组装 -> QC)。
+### 2. 📱 移动端车间终端 (Mobile Terminal)
+* **傻瓜式操作:** 大按钮设计，适配旧手机/平板。
+* **任务清单:** 工人登录后只看属于自己的待办工序。
+* **扫码作业:** 支持扫码领料、扫码入库、扫码完工。
 
-### 2. 💰 财务资金 (Finance) [NEW]
-- **资金看板:** 实时查看企业总资产、各账户余额。
-- **收支流水:** 支持记录收入/支出，可关联具体项目。
-- **项目核算:** 自动统计每个项目的资金流，计算项目真实利润。
+### 3. 📦 进销存 (Inventory)
+* **物料管理:** 实时库存查询，支持多级 BOM (物料清单)。
+* **缺料分析:** (规划中) 根据订单自动计算物料缺口。
 
-### 3. 📦 库存与供应链 (Inventory)
-- **物料管理:** 基础物料库、规格型号、标准成本。
-- **扫码作业:** 极简的移动端界面，支持 入库 / 领料 / 盘点。
-- **实时库存:** 每一笔流水自动更新库存数量。
-
-### 4. 🚀 项目与工程 (Engineering)
-- **项目管理:** 客户信息、交付日期、招牌类型管理。
-- **BOM (物料清单):** 支持多级 BOM 结构，自动计算理论用量。
-- **MRP (物料需求计划):** 根据订单自动计算缺料情况 (开发中)。
+### 4. 💰 财务管理 (Finance)
+* **资金看板:** 实时查看应收/应付账款，现金流趋势。
+* **自动记账:** 生产/采购行为自动生成财务流水。
 
 ---
 
-## 🏗 技术栈 (Tech Stack)
+## 🛠 技术栈 (Tech Stack)
 
-| 模块 | 技术选型 | 说明 |
-| :--- | :--- | :--- |
-| **Backend** | Python 3.11, FastAPI | 高性能异步 API 框架 |
-| **Database** | PostgreSQL, SQLAlchemy (Async) | 稳定可靠的关系型数据库 |
-| **Frontend** | React 18, TailwindCSS | 现代化、响应式的用户界面 |
-| **Icons** | Lucide React | 精美的 SVG 图标库 |
-| **Deploy** | Docker, Docker Compose | 一键容器化部署 |
+* **后端:** Python (FastAPI) + SQLAlchemy (Async) + PostgreSQL
+* **前端:** React + TypeScript + Vite + Ant Design + TailwindCSS
+* **部署:** Docker & Docker Compose (一键启动)
 
 ---
 
-## 🚀 快速开始 (Quick Start)
-
-### 前置要求
-确保你的电脑已安装 [Docker Desktop](https://www.docker.com/products/docker-desktop)。
+## 🏃‍♂️ 快速开始 (Quick Start)
 
 ### 1. 启动服务
-在项目根目录下运行：
-
+确保本地已安装 Docker，然后在根目录运行：
 ```bash
 docker-compose up -d --build
+
+2. 访问地址
+管理后台 (老板/设计师): http://localhost:3000 (或服务器IP:3000)
+
+默认账号: admin / 123
+
+车间终端 (工人): http://localhost:3000/login -> 登录工人账号
+
+测试工人: worker / 123
+
+后端 API 文档: http://localhost:8000/docs
+
+📖 使用指引 (User Guide)
+👨‍💼 老板/设计师 (Admin/Designer)
+接单: 在“项目管理”中新建项目。
+
+下达指令: 在“生产执行”中点击“下达生产指令”，创建工单 (Work Order)。
+
+排程/派工: 点击工单旁的 “排程” 按钮：
+
+加载模板（如发光字流程）。
+
+指派具体工人（如张三做切割）。
+
+点击“发布”。
+
+监控: 在列表查看工单进度（如：切割✅ -> 围边🔄 -> 组装🔒）。
+
+👷 工人 (Worker)
+手机登录系统，进入 “生产任务”。
+
+看到属于自己的任务（状态为 PENDING）。
+
+干完活后，点击 “✅ 完工”。
+
+系统自动将任务推给下一位同事。
+
+📅 版本记录
+v0.7 (Current): 新增工艺排程编辑器、工序自动流转逻辑、移动端任务列表升级。
+
+v0.6: 增加用户权限系统 (RBAC)、JWT 登录。
+
+v0.5: 财务模块上线。
+
+
+---

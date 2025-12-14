@@ -68,7 +68,16 @@ class WorkOrder(Base):
     
     # Self-referential relationship for Rework (Parent -> Children)
     children = relationship("WorkOrder", backref=backref('parent', remote_side=[id]))
-
+    
+    steps = relationship("WorkOrderStep", back_populates="work_order", order_by="WorkOrderStep.sequence", cascade="all, delete-orphan")
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # 虚拟属性，自动从关联的 project 对象里取名字
+    @property
+    def project_name(self):
+        return self.project.name if self.project else "未知项目"
+    
 class RoutingStep(Base):
     __tablename__ = "routing_steps"
 
@@ -236,4 +245,29 @@ class User(Base):
     
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+# --- 工序模型 (Process Steps) ---
+class StepStatus(str, enum.Enum):
+    LOCKED = "LOCKED"       # 上一步没完，锁定
+    PENDING = "PENDING"     # 轮到了，待办
+    COMPLETED = "COMPLETED" # 完工
+
+class WorkOrderStep(Base):
+    __tablename__ = "work_order_steps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    wo_id = Column(Integer, ForeignKey("work_orders.id"), nullable=False)
+    
+    name = Column(String(50), nullable=False)   # 工序名 (如: 激光切割)
+    sequence = Column(Integer, nullable=False)  # 顺序 (1, 2, 3...)
+    
+    # 指派给谁 (User ID)
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # 状态机
+    status = Column(SAEnum(StepStatus), default=StepStatus.LOCKED)
+    
+    # 关联
+    work_order = relationship("WorkOrder", back_populates="steps")
+    assigned_user = relationship("User", foreign_keys=[assigned_to])
 

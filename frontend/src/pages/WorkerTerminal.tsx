@@ -7,6 +7,7 @@ import {
     ClipboardList, PlayCircle, CheckSquare, Trash2, RotateCcw,
     LogOut
 } from 'lucide-react'
+import { message } from 'antd' // 引入 message 组件做轻提示
 import InventoryModal from '../components/InventoryModal'
 
 const API_URL = 'http://localhost:8000'
@@ -34,7 +35,6 @@ const BigButton = ({ label, color, icon, onClick }: any) => (
 export default function WorkerTerminal() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<'HOME' | 'SCAN' | 'TASKS'>('HOME')
-  // 🆕 新增 REWORK 类型
   const [txnType, setTxnType] = useState<'IN' | 'OUT' | 'SCRAP' | 'REWORK'>('OUT')
   
   const [materialId, setMaterialId] = useState<string>('')
@@ -45,6 +45,9 @@ export default function WorkerTerminal() {
   
   const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
   const [isInventoryOpen, setIsInventoryOpen] = useState(false)
+
+  // 获取当前登录用户名
+  const currentUsername = localStorage.getItem('user')
 
   // 加载工单
   useEffect(() => {
@@ -63,39 +66,24 @@ export default function WorkerTerminal() {
       } catch (e) { console.error("加载工单失败"); }
   }
 
-  const updateStatus = async (woId: number, newStatus: string) => {
-      try {
-          await axios.patch(`${API_URL}/work_orders/${woId}/status`, { status: newStatus });
-          fetchWorkOrders();
-          setStatus({ type: 'success', msg: `✅ 状态已更新` });
-          setTimeout(() => setStatus(null), 1500);
-      } catch (e: any) {
-          const msg = e.response?.data?.detail || '更新失败';
-          setStatus({ type: 'error', msg });
-          setTimeout(() => setStatus(null), 3000);
-      }
-  }
-
+  // 提交扫码操作 (入库/领料/报废/返工)
   const handleSubmit = async () => {
     if (!qty) return // 数量必填
-    // 如果不是 REWORK 且不是入库，必须有物料ID (返工是对工单操作，不需要扫物料码)
-    if (txnType !== 'REWORK' && txnType !== 'IN' && !materialId) return
     
-    // 如果不是入库，必须选工单
+    // 校验逻辑
+    if (txnType !== 'REWORK' && txnType !== 'IN' && !materialId) return
     if (txnType !== 'IN' && !selectedWoId) {
         setStatus({ type: 'error', msg: '⚠️ 请先选择关联的工单！' });
         return;
     }
 
     try {
-      // 🆕 分支逻辑：如果是返工，调用的接口不一样
       if (txnType === 'REWORK') {
         await axios.post(`${API_URL}/work_orders/${selectedWoId}/rework`, {
             qty: parseInt(qty)
         });
-        setStatus({ type: 'success', msg: `✅ 返工单已生成！请前往任务列表查看` });
+        setStatus({ type: 'success', msg: `✅ 返工单已生成！` });
       } else {
-        // 原有库存/报废逻辑
         const res = await axios.post(`${API_URL}/inventory/scan`, {
             material_id: parseInt(materialId),
             txn_type: txnType,
@@ -123,68 +111,94 @@ export default function WorkerTerminal() {
     }
   }
 
-  // --- TASKS 模式 ---
+  // --- 🆕 TASKS 模式 (工序流转版) ---
   if (mode === 'TASKS') {
       return (
         <div className="p-4 h-screen flex flex-col bg-slate-100">
+            {/* 顶部标题 */}
             <div className="flex items-center mb-4">
                 <button onClick={() => setMode('HOME')} className="p-2 bg-white rounded-xl shadow text-gray-600">
                     <ArrowLeft size={32}/>
                 </button>
-                <h1 className="text-2xl font-bold ml-4 text-gray-700">📋 我的生产任务</h1>
+                <h1 className="text-2xl font-bold ml-4 text-gray-700">📋 我的工序任务</h1>
             </div>
+
+            {/* 状态提示 */}
             {status && (
-                <div className={`p-4 mb-4 rounded-xl text-white text-xl font-bold text-center ${status.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                <div className={`p-4 mb-4 rounded-xl text-white text-xl font-bold text-center animate-bounce ${status.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
                     {status.msg}
                 </div>
             )}
+
             <div className="flex-1 overflow-y-auto space-y-4">
-                {workOrders.length === 0 && <div className="text-center text-gray-400 mt-10">暂无待办任务</div>}
-                {workOrders.map(wo => (
-                    <div key={wo.id} className="bg-white p-5 rounded-2xl shadow-sm border-l-8 border-blue-500 flex justify-between items-center">
-                        <div>
-                            <div className="text-sm text-gray-400 font-bold flex items-center gap-2">
-                                WO #{wo.id}
-                                {/* 如果是返工单，显示特殊标签 */}
-                                {wo.wo_type === 'REWORK' && (
-                                    <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs border border-amber-200 flex items-center gap-1">
-                                      <RotateCcw size={12}/> 返工
+                {/* 遍历所有工单，寻找属于当前工人的工序 */}
+                {workOrders.map(wo => {
+                    // 🔍 核心逻辑 1: 找到状态为 PENDING (待办) 的步骤
+                    const currentStep = wo.steps?.find((s: any) => s.status === 'PENDING');
+
+                    // 🔍 核心逻辑 2: 过滤任务
+                    // 如果没步骤、或者步骤指派了人但不是我，都不显示
+                    if (!currentStep) return null;
+                    if (currentStep.assigned_user && currentStep.assigned_user.username !== currentUsername) {
+                        return null;
+                    }
+
+                    return (
+                        <div key={wo.id} className="bg-white p-5 rounded-2xl shadow-sm border-l-8 border-blue-500">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">
+                                    WO #{wo.id}
                                 </span>
-                                )}
+                                <span className="text-xs text-gray-400">{wo.planned_end} 交付</span>
                             </div>
-                            {/* 🆕 优化 2: 如果有父工单，显示来源 */}
-                            {wo.parent_id && (
-                                <div className="text-xs text-gray-400 mt-1">
-                                    ↳ 来源: 原工单 #{wo.parent_id}
+                            
+                            <h3 className="text-xl font-black text-slate-800 mb-1">{wo.project_name}</h3>
+                            
+                            {/* 当前工序卡片 */}
+                            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl mt-2 flex justify-between items-center">
+                                <div>
+                                    <div className="text-xs text-yellow-600 font-bold uppercase mb-1">当前工序</div>
+                                    <div className="text-3xl font-black text-yellow-800 flex items-center gap-2">
+                                        <PlayCircle size={28}/> {currentStep.name}
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                        {currentStep.assigned_user ? `👤 指派给: ${currentStep.assigned_user.username}` : '🌐 公共任务池'}
+                                    </div>
                                 </div>
-                            )}
-                            <div className="text-xl font-bold text-slate-800">{wo.project_name}</div>
-                            <div className="mt-1 text-sm text-gray-500">计划数量: {wo.qty}</div>
-                            <div className="mt-1">
-                                {wo.status === 'PLANNED' && <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-sm font-bold">🕒 待开工</span>}
-                                {wo.status === 'IN_PROGRESS' && <span className="bg-green-100 text-green-600 px-2 py-1 rounded text-sm font-bold animate-pulse">🔥 进行中</span>}
+                                
+                                {/* ✅ 完工按钮 (触发流转) */}
+                                <button 
+                                    onClick={async () => {
+                                        try {
+                                            // 调用后端 complete 接口
+                                            await axios.post(`${API_URL}/work_orders/steps/${currentStep.id}/complete`);
+                                            setStatus({ type: 'success', msg: '✅ 工序完成！已流转到下一步' });
+                                            fetchWorkOrders(); // 刷新列表，任务应该会消失
+                                        } catch(e) {
+                                            setStatus({ type: 'error', msg: '提交失败，请重试' });
+                                        }
+                                    }}
+                                    className="bg-green-500 text-white h-16 px-6 rounded-2xl font-bold shadow-lg active:scale-95 flex items-center gap-2 border-b-4 border-green-700 active:border-b-0 active:translate-y-1 transition-all"
+                                >
+                                    <CheckSquare size={24}/> 完工打卡
+                                </button>
                             </div>
                         </div>
-                        <div>
-                            {wo.status === 'PLANNED' && (
-                                <button onClick={() => updateStatus(wo.id, 'IN_PROGRESS')} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg active:scale-95 flex items-center gap-2">
-                                    <PlayCircle /> 开工
-                                </button>
-                            )}
-                            {wo.status === 'IN_PROGRESS' && (
-                                <button onClick={() => updateStatus(wo.id, 'COMPLETED')} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg active:scale-95 flex items-center gap-2">
-                                    <CheckSquare /> 完工
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
+                
+                {/* 如果过滤完列表是空的 */}
+                <div className="text-center text-gray-400 mt-20">
+                    <div className="text-6xl mb-4">🍵</div>
+                    <p>当前没有待办工序</p>
+                    <p className="text-sm mt-2">休息一下，或者去帮别人</p>
+                </div>
             </div>
         </div>
       )
   }
 
-  // --- SCAN 扫码作业界面 ---
+  // --- SCAN 扫码作业界面 (保持不变) ---
   if (mode === 'SCAN') {
     let bgColor = 'bg-slate-100';
     let titleColor = 'text-gray-700';
@@ -235,7 +249,7 @@ export default function WorkerTerminal() {
               </div>
           )}
 
-          {/* 返工不需要扫物料码，因为是对工单的操作 */}
+          {/* 返工不需要扫物料码 */}
           {txnType !== 'REWORK' && (
             <div>
                 <label className="block text-lg text-gray-500 mb-1">物料 ID</label>
@@ -263,14 +277,9 @@ export default function WorkerTerminal() {
 
   // --- HOME ---
   return (
-
     <div className="p-6 h-screen bg-gray-100 flex flex-col relative">
-    
-    {/* 顶部标题栏 + 退出按钮 */}
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-500">🏭 工厂作业终端</h1>
-      
-      {/* 退出按钮 */}
         <button 
           onClick={() => navigate('/')} 
           className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-600 rounded-xl font-bold active:scale-95 transition"
@@ -289,7 +298,6 @@ export default function WorkerTerminal() {
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <BigButton label="登记次品" color="rose" icon={<Trash2 size={40} />} onClick={() => { setTxnType('SCRAP'); setMode('SCAN') }} />
-        {/* 🆕 返工入口 */}
         <BigButton label="申请返工" color="amber" icon={<RotateCcw size={40} />} onClick={() => { setTxnType('REWORK'); setMode('SCAN') }} />
       </div>
       

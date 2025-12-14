@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Select, DatePicker, Tag, message } from 'antd';
-import { PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Select, DatePicker, Tag, message, Space } from 'antd';
+import { PlayCircleOutlined, ReloadOutlined, PartitionOutlined } from '@ant-design/icons';
 import axios from 'axios';
-import dayjs from 'dayjs';
-import RoutingEditor from './RoutingEditor';
-import { PartitionOutlined } from '@ant-design/icons'; // 图标
+import ProcessEditor from './ProcessEditor'; // ✅ 只引入这一个编辑器
+
+// ⚠️ 记得部署时改 IP
+const API_URL = 'http://localhost:8000';
 
 interface WorkOrder {
     id: number;
@@ -16,30 +17,34 @@ interface WorkOrder {
 
 const WorkOrderManager: React.FC = () => {
     const [wos, setWos] = useState<WorkOrder[]>([]);
-    const [projects, setProjects] = useState<any[]>([]); // 用于下拉选择项目
+    const [projects, setProjects] = useState<any[]>([]); 
+    
+    // 创建工单弹窗状态
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [form] = Form.useForm();
-    const [isRoutingOpen, setIsRoutingOpen] = useState(false);
-    const [currentWoId, setCurrentWoId] = useState<number | null>(null);
+
+    // 🆕 工艺排程弹窗状态
+    const [isProcessOpen, setIsProcessOpen] = useState(false);
+    const [currentWo, setCurrentWo] = useState<WorkOrder | null>(null);
 
     // 1. 加载工单列表
     const fetchWos = async () => {
         setLoading(true);
         try {
-            const res = await axios.get('http://localhost:8000/work_orders/');
+            const res = await axios.get(`${API_URL}/work_orders/`);
             setWos(res.data);
         } catch (error) {
-            message.error('加载失败');
+            message.error('加载工单列表失败');
         } finally {
             setLoading(false);
         }
     };
 
-    // 2. 加载项目列表（用于下拉框）
+    // 2. 加载项目列表
     const fetchProjects = async () => {
         try {
-            const res = await axios.get('http://localhost:8000/projects/');
+            const res = await axios.get(`${API_URL}/projects/`);
             setProjects(res.data);
         } catch (error) { console.error(error); }
     };
@@ -57,8 +62,8 @@ const WorkOrderManager: React.FC = () => {
                 planned_end: values.dates ? values.dates[1].format('YYYY-MM-DD') : null,
                 qty: 1
             };
-            await axios.post('http://localhost:8000/work_orders/', payload);
-            message.success('✅ 生产指令已下达！工艺路线已自动生成。');
+            await axios.post(`${API_URL}/work_orders/`, payload);
+            message.success('✅ 生产指令已下达！');
             setIsModalOpen(false);
             form.resetFields();
             fetchWos();
@@ -89,21 +94,24 @@ const WorkOrderManager: React.FC = () => {
             )
         },
         {
-            title: '工艺排程',
-            key: 'routing',
-            render: (_: any, r: WorkOrder) => (
-                <Button 
-                    size="small" 
-                    icon={<PartitionOutlined />} 
-                    onClick={() => {
-                        setCurrentWoId(r.id);
-                        setIsRoutingOpen(true);
-            }}
-        >
-            调整工艺
-        </Button>
-    )
-}
+            title: '操作',
+            key: 'action',
+            render: (_: any, record: WorkOrder) => (
+                <Space>
+                    {/* 🆕 排程按钮 */}
+                    <Button 
+                        size="small" 
+                        icon={<PartitionOutlined />} 
+                        onClick={() => {
+                            setCurrentWo(record);
+                            setIsProcessOpen(true);
+                        }}
+                    >
+                        排程 / 派工
+                    </Button>
+                </Space>
+            )
+        }
     ];
 
     return (
@@ -111,7 +119,7 @@ const WorkOrderManager: React.FC = () => {
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-700">生产工单 (Work Orders)</h3>
                 <div className="space-x-2">
-                    <Button icon={<ReloadOutlined />} onClick={fetchWos} />
+                    <Button icon={<ReloadOutlined />} onClick={fetchWos}>刷新</Button>
                     <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => { setIsModalOpen(true); fetchProjects(); }}>
                         下达生产指令
                     </Button>
@@ -125,6 +133,7 @@ const WorkOrderManager: React.FC = () => {
                 loading={loading}
             />
 
+            {/* 创建工单 Modal */}
             <Modal
                 title="🚀 下达生产工单"
                 open={isModalOpen}
@@ -151,10 +160,12 @@ const WorkOrderManager: React.FC = () => {
                 </Form>
             </Modal>
 
-            <RoutingEditor 
-                open={isRoutingOpen} 
-                onClose={() => setIsRoutingOpen(false)}
-                woId={currentWoId}
+            {/* ✅ 统一使用 ProcessEditor */}
+            <ProcessEditor 
+                open={isProcessOpen}
+                onClose={() => setIsProcessOpen(false)}
+                woId={currentWo?.id || null}
+                projectTitle={currentWo?.project_name || ''}
             />
         </div>
     );
