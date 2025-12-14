@@ -8,18 +8,18 @@ import {
   ShoppingCartOutlined,
   BankOutlined,      
   FileTextOutlined,
-  UserOutlined,       // 👤 员工管理图标
-  LogoutOutlined      // 🚪 退出图标
+  UserOutlined,
+  LogoutOutlined,
+  ScanOutlined // 🆕 引入扫码图标
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom'; // 用于退出跳转
+import { useNavigate } from 'react-router-dom';
 
-// 引入组件
 import CreateMaterialModal from '../components/CreateMaterialModal'; 
 import ProjectManager from '../components/ProjectManager';
 import WorkOrderManager from '../components/WorkOrderManager'; 
 import BIReport from '../components/BIReport';
 import PurchasingDashboard from '../components/PurchasingDashboard';
-import UserManager from '../components/UserManager'; // 👤 引入员工管理
+import UserManager from '../components/UserManager';
 import Finance from './Finance'; 
 import Invoices from './Invoices';
 
@@ -33,36 +33,47 @@ const AdminDashboard: React.FC = () => {
   
   const { token: { colorBgContainer, borderRadiusLG } } = theme.useToken();
 
-  // 1️⃣ 获取当前用户角色
   const userRole = localStorage.getItem('role');
   const username = localStorage.getItem('user');
 
-  // 2️⃣ 定义菜单逻辑 (移到 JSX 外面)
+  // --- 1️⃣ 定义菜单 (包含车间入口) ---
   const menuItems: any[] = [
     { key: '1', icon: <DatabaseOutlined />, label: '基础数据' },
     { key: '2', icon: <ProjectOutlined />, label: '项目管理' },
     { key: '3', icon: <SolutionOutlined />, label: '生产执行' },
     { key: '5', icon: <ShoppingCartOutlined />, label: '采购缺料' },
     { key: '4', icon: <DashboardOutlined />, label: '报表分析' },
+    { type: 'divider' },
+    // 🆕 所有人都能看到这个入口，点击去车间
+    { key: 'worker_terminal', icon: <ScanOutlined />, label: '进入车间终端' },
   ];
 
-  // 🔒 只有 ADMIN 才能看到这些
+  // 🔒 只有 ADMIN 才能看到财务和员工管理
   if (userRole === 'ADMIN') {
     menuItems.push(
       { type: 'divider' },
       { key: '6', icon: <BankOutlined />, label: '资金看板' },
       { key: '7', icon: <FileTextOutlined />, label: '应收应付' },
-      { key: '8', icon: <UserOutlined />, label: '员工管理' } // 👤 新增
+      { key: '8', icon: <UserOutlined />, label: '员工管理' }
     );
   }
 
-  // 3️⃣ 退出登录逻辑
-  const handleLogout = () => {
-    localStorage.clear(); // 清空 Token
-    navigate('/login');   // 跳回登录
+  // --- 2️⃣ 处理点击逻辑 (关键！) ---
+  const handleMenuClick = (e: any) => {
+    if (e.key === 'worker_terminal') {
+      // 🚀 如果点的是车间，直接跳转路由
+      navigate('/worker');
+    } else {
+      // 其他情况，切换右侧组件
+      setActiveMenu(e.key);
+    }
   };
 
-  // 4️⃣ 渲染内容逻辑
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate('/login');
+  };
+
   const renderContent = () => {
     switch (activeMenu) {
       case '1': 
@@ -83,10 +94,10 @@ const AdminDashboard: React.FC = () => {
       case '4': return <BIReport />;
       case '5': return <PurchasingDashboard />;
       
-      // 🔒 财务与管理 (加一层安全校验，防止有人改代码强行访问)
+      // 🔒 安全校验
       case '6': return userRole === 'ADMIN' ? <Finance /> : <div>无权访问</div>;
       case '7': return userRole === 'ADMIN' ? <Invoices /> : <div>无权访问</div>;
-      case '8': return userRole === 'ADMIN' ? <UserManager /> : <div>无权访问</div>; // 👤 渲染员工管理
+      case '8': return userRole === 'ADMIN' ? <UserManager /> : <div>无权访问</div>;
         
       default: return <div>🚧 功能开发中</div>;
     }
@@ -99,12 +110,11 @@ const AdminDashboard: React.FC = () => {
            {collapsed ? 'ERP' : '🏭 Factory ERP'}
         </div>
         
-        {/* 这里的 items 直接使用我们上面定义好的变量 */}
         <Menu 
           theme="dark" 
           defaultSelectedKeys={['2']} 
           mode="inline" 
-          onClick={(e) => setActiveMenu(e.key)} 
+          onClick={handleMenuClick} // 👈 这里绑定了新的处理函数
           items={menuItems} 
         />
       </Sider>

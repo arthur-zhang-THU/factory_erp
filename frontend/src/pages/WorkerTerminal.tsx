@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { 
     PackagePlus, PackageMinus, ScanLine, 
     AlertCircle, CheckCircle2, ArrowLeft, 
-    ClipboardList, PlayCircle, CheckSquare, Trash2, RotateCcw
+    ClipboardList, PlayCircle, CheckSquare, Trash2, RotateCcw,
+    LogOut
 } from 'lucide-react'
 import InventoryModal from '../components/InventoryModal'
 
@@ -30,6 +32,7 @@ const BigButton = ({ label, color, icon, onClick }: any) => (
 )
 
 export default function WorkerTerminal() {
+  const navigate = useNavigate()
   const [mode, setMode] = useState<'HOME' | 'SCAN' | 'TASKS'>('HOME')
   // 🆕 新增 REWORK 类型
   const [txnType, setTxnType] = useState<'IN' | 'OUT' | 'SCRAP' | 'REWORK'>('OUT')
@@ -260,9 +263,22 @@ export default function WorkerTerminal() {
 
   // --- HOME ---
   return (
-    <div className="p-6 h-screen bg-gray-100 flex flex-col justify-center relative">
-      <h1 className="text-center text-3xl font-bold text-gray-400 mb-8">🏭 工厂作业终端</h1>
+
+    <div className="p-6 h-screen bg-gray-100 flex flex-col relative">
+    
+    {/* 顶部标题栏 + 退出按钮 */}
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-500">🏭 工厂作业终端</h1>
       
+      {/* 退出按钮 */}
+        <button 
+          onClick={() => navigate('/')} 
+          className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-600 rounded-xl font-bold active:scale-95 transition"
+        >
+          <LogOut size={20} /> 退出
+        </button>
+      </div>
+
       <BigButton label="生产任务" color="orange" icon={<ClipboardList size={40} />} onClick={() => setMode('TASKS')} />
       <div className="h-4"></div>
       

@@ -37,15 +37,15 @@ function App() {
         {/* 公开路由：导航首页 */}
         <Route path="/" element={<HomeNav />} />
         
-        {/* 🔒 受保护路由：车间终端 (只允许 WORKER) */}
+        {/* 🔒 受保护路由：车间终端 (允许 WORKER, ADMIN, DESIGNER) */}
         <Route path="/worker" element={
-          <PrivateRoute allowedRoles={['WORKER']}>
+          <PrivateRoute allowedRoles={['WORKER', 'ADMIN', 'DESIGNER']}>
             <WorkerTerminal />
           </PrivateRoute>
         } />
         
         {/* 🔒 受保护路由：管理后台 (允许 ADMIN 和 DESIGNER) */}
-        {/* 注意：AdminDashboard 内部会再次判断，如果是 DESIGNER 就不显示财务菜单 */}
+        {/* AdminDashboard 内部会再次判断，如果是 DESIGNER 就不显示财务菜单 */}
         <Route path="/admin" element={
           <PrivateRoute allowedRoles={['ADMIN', 'DESIGNER']}>
             <AdminDashboard />
@@ -59,9 +59,9 @@ function App() {
   )
 }
 
-// 简单的导航首页组件 (保持你原来的样子，很棒！)
+// 简单的导航首页组件
 function HomeNav() {
-  // 我们稍微改一下 Link，让它看起来虽然是链接，但会被 PrivateRoute 拦截
+  // 看起来是链接，但会被 PrivateRoute 拦截
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-800 text-white gap-10">
       <h1 className="text-5xl font-bold">🏭 广告工厂 ERP 系统</h1>
