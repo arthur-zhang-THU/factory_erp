@@ -1,16 +1,15 @@
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
-import Login from './pages/Login' // 1. 引入登录页
+import Login from './pages/Login' 
 import WorkerTerminal from './pages/WorkerTerminal'
 import AdminDashboard from './pages/AdminDashboard'
-// 注意：Finance 和 Invoices 不需要单独配置路由了，因为它们已经变成 AdminDashboard 的子模块了
 
-// --- 🔒 2. 路由守卫组件 (核心安全逻辑) ---
+// --- 🔒 2. 路由守卫组件 ---
 const PrivateRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
   const location = useLocation();
 
-  // A. 没登录？ -> 踢去登录页，并记录"他本来想去哪"(state.from)
+  // A. 没登录？ -> 踢去登录页
   if (!token) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
@@ -31,28 +30,26 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 公开路由：登录页 */}
+        {/* 公开路由 */}
         <Route path="/login" element={<Login />} />
-
-        {/* 公开路由：导航首页 */}
         <Route path="/" element={<HomeNav />} />
         
-        {/* 🔒 受保护路由：车间终端 (允许 WORKER, ADMIN, DESIGNER) */}
+        {/* 🔒 车间终端：允许 工人、老板、设计师、 工头 (FOREMAN) */}
         <Route path="/worker" element={
-          <PrivateRoute allowedRoles={['WORKER', 'ADMIN', 'DESIGNER']}>
+          <PrivateRoute allowedRoles={['WORKER', 'ADMIN', 'DESIGNER', 'FOREMAN']}>
             <WorkerTerminal />
           </PrivateRoute>
         } />
         
-        {/* 🔒 受保护路由：管理后台 (允许 ADMIN 和 DESIGNER) */}
-        {/* AdminDashboard 内部会再次判断，如果是 DESIGNER 就不显示财务菜单 */}
+        {/* 🔒 管理后台：允许 老板、设计师、 工头 (FOREMAN) */}
+        {/* 工头需要进后台来进行“排程” */}
         <Route path="/admin" element={
-          <PrivateRoute allowedRoles={['ADMIN', 'DESIGNER']}>
+          <PrivateRoute allowedRoles={['ADMIN', 'DESIGNER', 'FOREMAN']}>
             <AdminDashboard />
           </PrivateRoute>
         } />
 
-        {/* 404 - 随便输乱七八糟的路径，重定向回首页 */}
+        {/* 404 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
@@ -61,7 +58,6 @@ function App() {
 
 // 简单的导航首页组件
 function HomeNav() {
-  // 看起来是链接，但会被 PrivateRoute 拦截
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-800 text-white gap-10">
       <h1 className="text-5xl font-bold">🏭 广告工厂 ERP 系统</h1>

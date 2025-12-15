@@ -6,6 +6,9 @@ import { Button, Form, Input, Card, message, Typography } from 'antd';
 
 const { Title, Text } = Typography;
 
+// ⚠️ 部署时记得把这里换成服务器 IP
+const API_URL = 'http://localhost:8000';
+
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -13,35 +16,31 @@ export default function Login() {
   const handleLogin = async (values: any) => {
     setLoading(true);
     try {
-      // 1. 发送表单数据 (OAuth2 格式要求 x-www-form-urlencoded)
-      const formData = new FormData();
-      formData.append('username', values.username);
-      formData.append('password', values.password);
+      
+      // 直接传对象，Axios 会自动转为 JSON 发送
+      const res = await axios.post(`${API_URL}/auth/token`, values);
 
-      const res = await axios.post('http://localhost:8000/auth/token', formData);
-      const { access_token } = res.data;
+      // 后端现在直接返回了这三个字段，不需要再去解密 Token 了
+      const { access_token, role, username } = res.data;
 
-      // 2. 解析 Token 获取角色 (简单 Base64 解码 payload)
-      // JWT 格式: header.payload.signature
-      const payload = JSON.parse(atob(access_token.split('.')[1]));
-      const role = payload.role;
-
-      // 3. 存 Token 和 角色
+      // 存储信息
       localStorage.setItem('token', access_token);
       localStorage.setItem('role', role);
-      localStorage.setItem('user', values.username);
+      localStorage.setItem('user', username);
 
-      message.success('登录成功！欢迎回来');
+      message.success(`登录成功！欢迎, ${username}`);
 
-      // 4. 根据角色跳转不同页面
+      // 根据角色跳转
       if (role === 'WORKER') {
-        navigate('/worker'); // 工人去车间
+        navigate('/worker'); 
       } else {
-        navigate('/'); // 老板和设计师去后台
+        navigate('/'); 
       }
 
-    } catch (error) {
-      message.error('账号或密码错误');
+    } catch (error: any) {
+      console.error(error);
+      const msg = error.response?.data?.detail || '登录失败，请检查账号密码';
+      message.error(msg);
     } finally {
       setLoading(false);
     }
@@ -66,7 +65,7 @@ export default function Login() {
               name="username"
               rules={[{ required: true, message: '请输入账号!' }]}
             >
-              <Input prefix={<UserOutlined />} placeholder="账号 (admin/worker...)" />
+              <Input prefix={<UserOutlined />} placeholder="账号 (如: admin)" />
             </Form.Item>
 
             <Form.Item

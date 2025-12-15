@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Select, DatePicker, Tag, message, Space } from 'antd';
-import { PlayCircleOutlined, ReloadOutlined, PartitionOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, ReloadOutlined, PartitionOutlined, PlusOutlined } from '@ant-design/icons';
 import axios from 'axios';
-import ProcessEditor from './ProcessEditor'; // ✅ 只引入这一个编辑器
+import ProcessEditor from './ProcessEditor'; 
 
-// ⚠️ 记得部署时改 IP
+// ⚠️ 部署时改 IP
 const API_URL = 'http://localhost:8000';
 
 interface WorkOrder {
@@ -13,6 +13,7 @@ interface WorkOrder {
     status: string;
     planned_start: string;
     planned_end: string;
+    wo_type: string;
 }
 
 const WorkOrderManager: React.FC = () => {
@@ -72,9 +73,25 @@ const WorkOrderManager: React.FC = () => {
         }
     };
 
+    // 🆕 调试函数：专门用来处理点击
+    const handleOpenProcess = (record: WorkOrder) => {
+        console.log("👉 [Debug] 点击了排程按钮, 目标工单ID:", record.id);
+        setCurrentWo(record);
+        setIsProcessOpen(true);
+    };
+
     const columns = [
         { title: 'WO #', dataIndex: 'id', width: 80, align: 'center' as const },
-        { title: '关联项目', dataIndex: 'project_name', render: (t:string) => <b>{t}</b> },
+        { 
+            title: '关联项目', 
+            dataIndex: 'project_name', 
+            render: (t:string, r: WorkOrder) => (
+                <div>
+                    <span className="font-bold">{t}</span>
+                    {r.wo_type === 'REWORK' && <Tag color="orange" className="ml-2">返工单</Tag>}
+                </div>
+            ) 
+        },
         { 
             title: '状态', 
             dataIndex: 'status',
@@ -98,14 +115,12 @@ const WorkOrderManager: React.FC = () => {
             key: 'action',
             render: (_: any, record: WorkOrder) => (
                 <Space>
-                    {/* 🆕 排程按钮 */}
                     <Button 
                         size="small" 
+                        type="primary"
+                        ghost 
                         icon={<PartitionOutlined />} 
-                        onClick={() => {
-                            setCurrentWo(record);
-                            setIsProcessOpen(true);
-                        }}
+                        onClick={() => handleOpenProcess(record)} // ✅ 使用调试函数
                     >
                         排程 / 派工
                     </Button>
@@ -159,13 +174,17 @@ const WorkOrderManager: React.FC = () => {
                     </div>
                 </Form>
             </Modal>
-
-            {/* ✅ 统一使用 ProcessEditor */}
+            {/* 🆕 工艺排程弹窗 */}
             <ProcessEditor 
+                key={currentWo?.id || 'empty-process-editor'} 
                 open={isProcessOpen}
-                onClose={() => setIsProcessOpen(false)}
+                onClose={() => {
+                    setIsProcessOpen(false);
+                    // 稍微延迟清空，防止关闭动画没播完就清空数据导致闪烁
+                    setTimeout(() => setCurrentWo(null), 300);
+                }}
                 woId={currentWo?.id || null}
-                projectTitle={currentWo?.project_name || ''}
+                projectTitle={currentWo?.project_name || '未选择项目'}
             />
         </div>
     );

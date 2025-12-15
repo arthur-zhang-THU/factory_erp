@@ -163,31 +163,54 @@ async def get_wo_steps(wo_id: int, db: AsyncSession = Depends(get_db)):
     )
     return result.scalars().all()
 
-# 保存排程 (全量更新)
+# 6. 保存/更新工单的工艺流程 (智能增量)
 @router.post("/{wo_id}/steps")
 async def update_wo_steps(wo_id: int, steps_in: List[StepCreate], db: AsyncSession = Depends(get_db)):
     wo = await db.get(WorkOrder, wo_id)
     if not wo:
         raise HTTPException(status_code=404, detail="工单不存在")
     
-    # 1. 清空旧步骤
-    await db.execute(text(f"DELETE FROM work_order_steps WHERE wo_id = {wo_id}"))
+    # 1. 查出当前数据库里已有的步骤，做成字典 {id: step_obj} 方便查找
+    existing_steps_query = await db.execute(
+        select(WorkOrderStep).where(WorkOrderStep.wo_id == wo_id)
+    )
+    existing_steps_map = {step.id: step for step in existing_steps_query.scalars().all()}
     
-    # 2. 插入新步骤
-    for idx, s in enumerate(steps_in):
+    # 记录前端提交上来的所有 ID，用于最后判断哪些要删除
+    incoming_ids = set()
+    
+    # 2. 遍历前端提交的数据 -> 更新或新增
+    for idx, s_in in enumerate(steps_in):
+        # 逻辑：第一步默认 PENDING，后面 LOCKED (仅针对新创建的，老步骤保持原状态)
         initial_status = StepStatus.PENDING if idx == 0 else StepStatus.LOCKED
-        
-        new_step = WorkOrderStep(
-            wo_id=wo_id,
-            name=s.name,
-            sequence=idx + 1,
-            assigned_to=s.assigned_to,
-            status=initial_status
-        )
-        db.add(new_step)
-        
+
+        if s_in.id and s_in.id in existing_steps_map:
+            # ✅ 情况 A: 更新旧步骤
+            step = existing_steps_map[s_in.id]
+            step.name = s_in.name
+            step.sequence = idx + 1  # 更新顺序
+            step.assigned_to = s_in.assigned_to
+            # ⚠️ 注意：这里故意不重置 step.status，保留工人的完成状态！
+            
+            incoming_ids.add(s_in.id)
+        else:
+            # ✅ 情况 B: 创建新步骤
+            new_step = WorkOrderStep(
+                wo_id=wo_id,
+                name=s_in.name,
+                sequence=idx + 1,
+                assigned_to=s_in.assigned_to,
+                status=initial_status # 新步骤使用初始状态
+            )
+            db.add(new_step)
+    
+    # 3. 删除操作: 数据库里有，但前端没传过来的 (说明被删了)
+    for existing_id, existing_step in existing_steps_map.items():
+        if existing_id not in incoming_ids:
+            await db.delete(existing_step)
+            
     await db.commit()
-    return {"msg": "工艺排程已保存"}
+    return {"msg": "工艺排程已智能更新"}
 
 # 工序流转 (完成当前，激活下一步)
 @router.post("/steps/{step_id}/complete")

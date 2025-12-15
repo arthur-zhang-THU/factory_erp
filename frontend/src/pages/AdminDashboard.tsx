@@ -1,19 +1,13 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Button, theme, Card } from 'antd';
+import { Layout, Menu, Button, theme, Card, Tag, message } from 'antd';
 import { 
-  DatabaseOutlined, 
-  DashboardOutlined, 
-  ProjectOutlined, 
-  SolutionOutlined, 
-  ShoppingCartOutlined,
-  BankOutlined,      
-  FileTextOutlined,
-  UserOutlined,
-  LogoutOutlined,
-  ScanOutlined // 🆕 引入扫码图标
+  DatabaseOutlined, DashboardOutlined, ProjectOutlined, 
+  SolutionOutlined, ShoppingCartOutlined, BankOutlined,      
+  FileTextOutlined, UserOutlined, LogoutOutlined, ScanOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
+// 引入组件
 import CreateMaterialModal from '../components/CreateMaterialModal'; 
 import ProjectManager from '../components/ProjectManager';
 import WorkOrderManager from '../components/WorkOrderManager'; 
@@ -25,6 +19,16 @@ import Invoices from './Invoices';
 
 const { Header, Sider, Content } = Layout;
 
+// 🆕 1. 定义一个自定义接口，解决 TypeScript 报错
+interface AppMenuItem {
+    key?: string;
+    icon?: React.ReactNode;
+    label?: React.ReactNode;
+    type?: 'divider' | 'group' | null;
+    roles?: string[]; // 我们自定义的权限字段
+    children?: AppMenuItem[];
+}
+
 const AdminDashboard: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [activeMenu, setActiveMenu] = useState('2'); 
@@ -33,38 +37,63 @@ const AdminDashboard: React.FC = () => {
   
   const { token: { colorBgContainer, borderRadiusLG } } = theme.useToken();
 
-  const userRole = localStorage.getItem('role');
+  const userRole = localStorage.getItem('role') || 'WORKER';
   const username = localStorage.getItem('user');
 
-  // --- 1️⃣ 定义菜单 (包含车间入口) ---
-  const menuItems: any[] = [
-    { key: '1', icon: <DatabaseOutlined />, label: '基础数据' },
-    { key: '2', icon: <ProjectOutlined />, label: '项目管理' },
-    { key: '3', icon: <SolutionOutlined />, label: '生产执行' },
-    { key: '5', icon: <ShoppingCartOutlined />, label: '采购缺料' },
-    { key: '4', icon: <DashboardOutlined />, label: '报表分析' },
+  // --- 2️⃣ 使用自定义接口定义菜单 ---
+  const allMenuItems: AppMenuItem[] = [
+    { 
+      key: '1', icon: <DatabaseOutlined />, label: '基础数据', 
+      roles: ['ADMIN', 'DESIGNER', 'FOREMAN'] 
+    },
+    { 
+      key: '2', icon: <ProjectOutlined />, label: '项目管理', 
+      roles: ['ADMIN', 'DESIGNER', 'FOREMAN'] 
+    },
+    { 
+      key: '3', icon: <SolutionOutlined />, label: '生产执行 (含排程)', 
+      roles: ['ADMIN', 'DESIGNER', 'FOREMAN'] 
+    },
+    { 
+      key: '5', icon: <ShoppingCartOutlined />, label: '采购缺料', 
+      roles: ['ADMIN', 'DESIGNER', 'FOREMAN'] 
+    },
+    { 
+      key: '4', icon: <DashboardOutlined />, label: 'BI 报表分析', 
+      roles: ['ADMIN'] 
+    },
+    // 分割线
     { type: 'divider' },
-    // 🆕 所有人都能看到这个入口，点击去车间
-    { key: 'worker_terminal', icon: <ScanOutlined />, label: '进入车间终端' },
+    { 
+      key: '6', icon: <BankOutlined />, label: '资金看板', 
+      roles: ['ADMIN'] 
+    },
+    { 
+      key: '7', icon: <FileTextOutlined />, label: '应收应付 (Invoice)', 
+      roles: ['ADMIN', 'DESIGNER'] 
+    },
+    { type: 'divider' },
+    { 
+      key: '8', icon: <UserOutlined />, label: '员工/用户管理', 
+      roles: ['ADMIN'] 
+    },
+    // 车间入口
+    { 
+      key: 'worker_terminal', icon: <ScanOutlined />, label: '进入车间终端', 
+      roles: ['ADMIN', 'DESIGNER', 'FOREMAN', 'WORKER'] 
+    },
   ];
 
-  // 🔒 只有 ADMIN 才能看到财务和员工管理
-  if (userRole === 'ADMIN') {
-    menuItems.push(
-      { type: 'divider' },
-      { key: '6', icon: <BankOutlined />, label: '资金看板' },
-      { key: '7', icon: <FileTextOutlined />, label: '应收应付' },
-      { key: '8', icon: <UserOutlined />, label: '员工管理' }
-    );
-  }
+  // --- 3️⃣ 过滤菜单 ---
+  const menuItems = allMenuItems.filter(item => {
+    if (item.type === 'divider') return true;
+    return item.roles ? item.roles.includes(userRole) : true;
+  });
 
-  // --- 2️⃣ 处理点击逻辑 (关键！) ---
   const handleMenuClick = (e: any) => {
     if (e.key === 'worker_terminal') {
-      // 🚀 如果点的是车间，直接跳转路由
       navigate('/worker');
     } else {
-      // 其他情况，切换右侧组件
       setActiveMenu(e.key);
     }
   };
@@ -72,6 +101,10 @@ const AdminDashboard: React.FC = () => {
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
+  };
+
+  const checkAuth = (allowedRoles: string[]) => {
+    return allowedRoles.includes(userRole);
   };
 
   const renderContent = () => {
@@ -91,15 +124,12 @@ const AdminDashboard: React.FC = () => {
         );
       case '2': return <ProjectManager />;
       case '3': return <WorkOrderManager />;
-      case '4': return <BIReport />;
+      case '4': return checkAuth(['ADMIN']) ? <BIReport /> : <div className="p-10 text-red-500">⛔️ 权限不足：仅老板可见</div>;
       case '5': return <PurchasingDashboard />;
-      
-      // 🔒 安全校验
-      case '6': return userRole === 'ADMIN' ? <Finance /> : <div>无权访问</div>;
-      case '7': return userRole === 'ADMIN' ? <Invoices /> : <div>无权访问</div>;
-      case '8': return userRole === 'ADMIN' ? <UserManager /> : <div>无权访问</div>;
-        
-      default: return <div>🚧 功能开发中</div>;
+      case '6': return checkAuth(['ADMIN']) ? <Finance /> : <div className="p-10 text-red-500">⛔️ 权限不足</div>;
+      case '7': return checkAuth(['ADMIN', 'DESIGNER']) ? <Invoices /> : <div className="p-10 text-red-500">⛔️ 权限不足</div>;
+      case '8': return checkAuth(['ADMIN']) ? <UserManager /> : <div className="p-10 text-red-500">⛔️ 权限不足</div>;
+      default: return <div>🚧 请在左侧选择菜单</div>;
     }
   };
 
@@ -114,14 +144,16 @@ const AdminDashboard: React.FC = () => {
           theme="dark" 
           defaultSelectedKeys={['2']} 
           mode="inline" 
-          onClick={handleMenuClick} // 👈 这里绑定了新的处理函数
-          items={menuItems} 
+          onClick={handleMenuClick} 
+          // 🆕 4. 这里的 `as any` 是关键，它解决了类型不匹配的报错
+          items={menuItems as any} 
         />
       </Sider>
       <Layout>
         <Header style={{ padding: '0 24px', background: colorBgContainer }} className="flex justify-between items-center">
           <div className="text-lg font-bold text-gray-700">
-            欢迎回来, {username} <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded ml-2">{userRole}</span>
+            欢迎回来, {username} 
+            <Tag color="geekblue" className="ml-3">{userRole}</Tag>
           </div>
           <Button icon={<LogoutOutlined />} onClick={handleLogout} danger>
             退出登录

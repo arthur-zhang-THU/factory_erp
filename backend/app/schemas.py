@@ -133,6 +133,11 @@ class InvoicePayment(BaseSchema):
     
 # --- Auth Schemas ---
 
+# 专门用于登录的 Schema
+class UserLogin(BaseSchema):
+    username: str
+    password: str
+
 class UserCreate(BaseSchema):
     username: str
     password: str
@@ -144,12 +149,16 @@ class UserResponse(BaseSchema):
     role: str
     is_active: bool
 
+# Token 必须包含 role 和 username
 class Token(BaseSchema):
     access_token: str
     token_type: str
+    role: str      
+    username: str
     
 # --- Step Schemas ---
 class StepCreate(BaseSchema):
+    id: int | None = None
     name: str
     assigned_to: int | None = None # 选填工人ID
 

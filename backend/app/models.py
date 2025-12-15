@@ -179,7 +179,7 @@ class FinanceTransaction(Base):
     account_id = Column(Integer, ForeignKey("finance_accounts.id"), nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, comment="关联项目(可选)")
     
-    # ✅ FIX: Use SAEnum here instead of Enum
+    # Use SAEnum here instead of Enum
     txn_type = Column(SAEnum(TransactionType), nullable=False)
     category = Column(SAEnum(FinanceCategory), nullable=False)
     
@@ -214,7 +214,7 @@ class FinanceInvoice(Base):
     # 比如：应收-万达项目款，应付-xx板材款
     title = Column(String(100), nullable=False, comment="账单标题")
     
-    # ✅ FIX: Use SAEnum here instead of Enum
+    # Use SAEnum here instead of Enum
     inv_type = Column(SAEnum(InvoiceType), nullable=False)
     status = Column(SAEnum(InvoiceStatus), default=InvoiceStatus.UNPAID)
     
@@ -233,6 +233,7 @@ class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"       # 老板：全权 + 用户管理
     DESIGNER = "DESIGNER" # 设计师：除财务外的后台权限
     WORKER = "WORKER"     # 工人：仅限车间终端
+    FOREMAN = "FOREMAN"   # 工头：可以编辑工艺流程
 
 class User(Base):
     __tablename__ = "users"
