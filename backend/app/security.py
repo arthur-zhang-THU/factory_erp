@@ -2,11 +2,15 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import os  # ✅ 新增：引入操作系统接口
 
-# ⚠️ 生产环境应该把这个放在环境变量里，这里为了演示写死
-SECRET_KEY = "FACTORY_ERP_SECRET_KEY_CHANGE_ME"
+# ⚠️ 生产环境应该把这个放在环境变量里
+# ✅ 修改：优先从环境变量读取，读不到才用默认值
+SECRET_KEY = os.getenv("SECRET_KEY", "FACTORY_ERP_SECRET_KEY_CHANGE_ME")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # Token 有效期 24 小时
+
+# Token 有效期 (默认 1440 分钟 = 24 小时)
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
