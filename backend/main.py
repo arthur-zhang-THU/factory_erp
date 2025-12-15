@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy import text
-from app.routers import inventory, projects , bom , work_orders, reports, purchasing, finance, auth
+from app.routers import inventory, projects , bom , work_orders, reports, purchasing, finance, auth, templates
 from app.database import engine 
 from app.models import Base
 
@@ -49,6 +49,7 @@ app.include_router(reports.router)
 app.include_router(purchasing.router)
 app.include_router(finance.router)
 app.include_router(auth.router)
+app.include_router(templates.router)
 
 @app.get("/")
 async def root():
