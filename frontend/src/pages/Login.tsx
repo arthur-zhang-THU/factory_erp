@@ -14,37 +14,42 @@ export default function Login() {
   const navigate = useNavigate();
 
   const handleLogin = async (values: any) => {
-    setLoading(true);
-    try {
-      
-      // 直接传对象，Axios 会自动转为 JSON 发送
-      const res = await axios.post(`${API_URL}/auth/token`, values);
+  setLoading(true);
+  try {
+    // ⚠️ 使用 URLSearchParams 将对象转换为 form-urlencoded
+    const formData = new URLSearchParams();
+    formData.append("username", values.username);
+    formData.append("password", values.password);
+    formData.append("grant_type", "password"); // OAuth2PasswordRequestForm 默认需要
+    formData.append("scope", "");              // 可选
 
-      // 后端现在直接返回了这三个字段，不需要再去解密 Token 了
-      const { access_token, role, username } = res.data;
+    const res = await axios.post(`${API_URL}/auth/token`, formData, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
 
-      // 存储信息
-      localStorage.setItem('token', access_token);
-      localStorage.setItem('role', role);
-      localStorage.setItem('user', username);
+    const { access_token, role, username } = res.data;
 
-      message.success(`登录成功！欢迎, ${username}`);
+    localStorage.setItem('token', access_token);
+    localStorage.setItem('role', role);
+    localStorage.setItem('user', username);
 
-      // 根据角色跳转
-      if (role === 'WORKER') {
-        navigate('/worker'); 
-      } else {
-        navigate('/'); 
-      }
+    message.success(`登录成功！欢迎, ${username}`);
 
-    } catch (error: any) {
-      console.error(error);
-      const msg = error.response?.data?.detail || '登录失败，请检查账号密码';
-      message.error(msg);
-    } finally {
-      setLoading(false);
+    if (role === 'WORKER') {
+      navigate('/worker'); 
+    } else {
+      navigate('/'); 
     }
-  };
+
+  } catch (error: any) {
+    console.error(error);
+    const msg = error.response?.data?.detail || '登录失败，请检查账号密码';
+    message.error(msg);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">

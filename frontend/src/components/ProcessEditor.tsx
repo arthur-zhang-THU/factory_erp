@@ -98,11 +98,12 @@ export default function ProcessEditor({ open, onClose, woId, projectTitle }: any
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [resUsers, resSteps, resTpl] = await Promise.all([
-        axios.get(`${API_URL}/auth/users`),
-        woId ? axios.get(`${API_URL}/work_orders/${woId}/steps`) : { data: [] },
-        axios.get(`${API_URL}/templates/`) 
-      ]);
+    const token = localStorage.getItem('token') || '';
+    const [resUsers, resSteps, resTpl] = await Promise.all([
+      axios.get(`${API_URL}/auth/users`, { headers: { Authorization: `Bearer ${token}` }}),
+      woId ? axios.get(`${API_URL}/work_orders/${woId}/steps`) : { data: [] },
+      axios.get(`${API_URL}/templates/`) 
+    ]);
 
       setWorkers(resUsers.data.filter((u: any) => ['WORKER', 'FOREMAN'].includes(u.role)));
       setTemplates(resTpl.data);

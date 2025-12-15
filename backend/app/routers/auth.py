@@ -3,11 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update
 from typing import List
 from datetime import timedelta
+from fastapi.security import OAuth2PasswordRequestForm
 
 from app.database import get_db
 from app.models import User, WorkOrderStep
 from app.schemas import UserCreate, UserLogin, UserResponse, Token
-from app.security import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.security import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_active_user
 
 # ✅ 使用 prefix="/auth"，这样下面的路径都不用重复写 /auth 了
 router = APIRouter(prefix="/auth", tags=["认证管理 (Auth)"])
@@ -34,7 +35,9 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
 # 2. 登录 (换取 Token)
 # 用 UserCreate 接收 JSON，适配前端 axios 请求
 @router.post("/token", response_model=Token)
-async def login_for_access_token(form_data: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)):
     # 查用户
     result = await db.execute(select(User).where(User.username == form_data.username))
     user = result.scalar()
@@ -63,10 +66,21 @@ async def login_for_access_token(form_data: UserLogin, db: AsyncSession = Depend
 
 # 3. 🆕 获取用户列表 (前端 UserManager 需要)
 @router.get("/users", response_model=List[UserResponse])
-async def read_users(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    # 按 ID 排序
-    result = await db.execute(select(User).order_by(User.id).offset(skip).limit(limit))
-    return result.scalars().all()
+async def read_users(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+                     ):
+    
+    try:
+        # 按 ID 排序
+        result = await db.execute(select(User).order_by(User.id).offset(skip).limit(limit))
+        users = result.scalars().all()
+        return users
+    except Exception as e:
+        print("Error fetching users:", e)
+        raise HTTPException(status_code=500, detail="获取用户数据失败")
 
 # 4. 🆕 删除用户 (前端 UserManager 需要)
 @router.delete("/users/{user_id}")
