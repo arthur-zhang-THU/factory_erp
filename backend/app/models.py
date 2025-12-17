@@ -110,6 +110,8 @@ class InventoryTxn(Base):
     material_id = Column(Integer, ForeignKey("materials.id"), nullable=False)
     wo_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
     
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True) 
+
     # FIX: Use SAEnum
     txn_type = Column(SAEnum(TxnType), nullable=False)
     qty = Column(Numeric(10, 3), nullable=False)
@@ -118,6 +120,9 @@ class InventoryTxn(Base):
     # Relationships
     material = relationship("Material", back_populates="inventory_txns")
     work_order = relationship("WorkOrder", back_populates="inventory_txns")
+    
+    # ✅✅✅ 建议也加上这个关系
+    user = relationship("User")
 
 # --- BOM ---
 class BOMHeader(Base):

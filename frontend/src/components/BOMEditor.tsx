@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Drawer, Table, Button, Form, Select, InputNumber, message, Popconfirm, Card, Statistic } from 'antd';
 import { DeleteOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import axios from 'axios';
+// ❌ 删除: import axios from 'axios';
+// ✅ 新增: 引入 api (自动带 Token)
+import api from '../api';
 
 interface Props {
     open: boolean;
@@ -22,7 +24,7 @@ interface BOMItem {
 
 // 基础物料用于下拉选择
 interface MaterialOption {
-    material_id: number;
+    id: number;
     name: string;
     spec: string;
 }
@@ -45,8 +47,7 @@ const BOMEditor: React.FC<Props> = ({ open, onClose, projectId, projectName }) =
 
     const fetchMaterials = async () => {
         try {
-            // 复用之前的库存状态接口来获取物料列表
-            const res = await axios.get('http://localhost:8000/inventory/status');
+            const res = await api.get('/inventory/status');
             setMaterials(res.data);
         } catch (error) {
             message.error('加载物料库失败');
@@ -57,9 +58,11 @@ const BOMEditor: React.FC<Props> = ({ open, onClose, projectId, projectName }) =
         if (!projectId) return;
         setLoading(true);
         try {
-            const res = await axios.get(`http://localhost:8000/bom/${projectId}`);
+            // ✅ 修改点 2: 使用 api.get
+            const res = await api.get(`/bom/${projectId}`);
             setBomItems(res.data);
         } catch (error) {
+            // 401 会被 api.ts 拦截，这里只提示业务错误
             message.error('加载 BOM 失败');
         } finally {
             setLoading(false);
@@ -70,7 +73,8 @@ const BOMEditor: React.FC<Props> = ({ open, onClose, projectId, projectName }) =
     const handleAdd = async (values: any) => {
         if (!projectId) return;
         try {
-            await axios.post(`http://localhost:8000/bom/${projectId}/items`, values);
+            // ✅ 修改点 3: 使用 api.post
+            await api.post(`/bom/${projectId}/items`, values);
             message.success('已添加');
             form.resetFields();
             fetchBOM(); // 刷新列表
@@ -82,7 +86,8 @@ const BOMEditor: React.FC<Props> = ({ open, onClose, projectId, projectName }) =
     // 3. 删除行
     const handleDelete = async (itemId: number) => {
         try {
-            await axios.delete(`http://localhost:8000/bom/items/${itemId}`);
+            // ✅ 修改点 4: 使用 api.delete
+            await api.delete(`/bom/items/${itemId}`);
             message.success('已删除');
             fetchBOM();
         } catch (error) {
@@ -148,7 +153,7 @@ const BOMEditor: React.FC<Props> = ({ open, onClose, projectId, projectName }) =
                             optionFilterProp="children"
                         >
                             {materials.map(m => (
-                                <Select.Option key={m.material_id} value={m.material_id}>
+                                <Select.Option key={m.id} value={m.id}>
                                     {m.name} <span className="text-gray-400 text-xs">({m.spec})</span>
                                 </Select.Option>
                             ))}

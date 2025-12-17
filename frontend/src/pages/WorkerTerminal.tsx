@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+// ❌ 删除: import axios from 'axios'
+// ✅ 新增: 引入封装好的 api 实例
+import api from '../api' 
 import { 
     PackagePlus, PackageMinus, ScanLine, 
     AlertCircle, CheckCircle2, ArrowLeft, 
     ClipboardList, PlayCircle, CheckSquare, Trash2, RotateCcw,
     LogOut
 } from 'lucide-react'
-import { message } from 'antd' // 引入 message 组件做轻提示
+import { message } from 'antd' 
 import InventoryModal from '../components/InventoryModal'
 
-const API_URL = 'http://localhost:8000'
+// ❌ 删除: const API_URL = 'http://localhost:8000' (已在 api.ts 中配置)
 
-// 复用的大按钮组件
+// 复用的大按钮组件 (保持不变)
 const BigButton = ({ label, color, icon, onClick }: any) => (
   <button
     onClick={onClick}
@@ -59,7 +61,8 @@ export default function WorkerTerminal() {
 
   const fetchWorkOrders = async () => {
       try {
-          const res = await axios.get(`${API_URL}/work_orders/`);
+          // ✅ 修改：使用 api.get，移除 ${API_URL}
+          const res = await api.get(`/work_orders/`);
           // 只显示未完成的
           const activeWos = res.data.filter((w:any) => w.status !== 'COMPLETED');
           setWorkOrders(activeWos);
@@ -79,12 +82,14 @@ export default function WorkerTerminal() {
 
     try {
       if (txnType === 'REWORK') {
-        await axios.post(`${API_URL}/work_orders/${selectedWoId}/rework`, {
+        // ✅ 修改：使用 api.post
+        await api.post(`/work_orders/${selectedWoId}/rework`, {
             qty: parseInt(qty)
         });
         setStatus({ type: 'success', msg: `✅ 返工单已生成！` });
       } else {
-        const res = await axios.post(`${API_URL}/inventory/scan`, {
+        // ✅ 修改：使用 api.post，发送到 inventory/scan (需要 Token)
+        const res = await api.post(`/inventory/scan`, {
             material_id: parseInt(materialId),
             txn_type: txnType,
             qty: parseFloat(qty),
@@ -111,7 +116,7 @@ export default function WorkerTerminal() {
     }
   }
 
-  // --- 🆕 TASKS 模式 (工序流转版) ---
+  // --- TASKS 模式 (工序流转版) ---
   if (mode === 'TASKS') {
       return (
         <div className="p-4 h-screen flex flex-col bg-slate-100">
@@ -137,7 +142,6 @@ export default function WorkerTerminal() {
                     const currentStep = wo.steps?.find((s: any) => s.status === 'PENDING');
 
                     // 🔍 核心逻辑 2: 过滤任务
-                    // 如果没步骤、或者步骤指派了人但不是我，都不显示
                     if (!currentStep) return null;
                     if (currentStep.assigned_user && currentStep.assigned_user.username !== currentUsername) {
                         return null;
@@ -166,12 +170,12 @@ export default function WorkerTerminal() {
                                     </div>
                                 </div>
                                 
-                                {/* ✅ 完工按钮 (触发流转) */}
+                                {/* 完工按钮 (触发流转) */}
                                 <button 
                                     onClick={async () => {
                                         try {
-                                            // 调用后端 complete 接口
-                                            await axios.post(`${API_URL}/work_orders/steps/${currentStep.id}/complete`);
+                                            // ✅ 修改：使用 api.post
+                                            await api.post(`/work_orders/steps/${currentStep.id}/complete`);
                                             setStatus({ type: 'success', msg: '✅ 工序完成！已流转到下一步' });
                                             fetchWorkOrders(); // 刷新列表，任务应该会消失
                                         } catch(e) {
@@ -302,6 +306,7 @@ export default function WorkerTerminal() {
       </div>
       
       <BigButton label="查库存" color="red" icon={<ScanLine size={40} />} onClick={() => setIsInventoryOpen(true)} />
+      {/* ⚠️ 注意：InventoryModal 组件内部也必须使用 api.ts，否则这里依然会报错 */}
       <InventoryModal open={isInventoryOpen} onClose={() => setIsInventoryOpen(false)} />
     </div>
   )

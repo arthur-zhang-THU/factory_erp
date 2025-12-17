@@ -1,29 +1,220 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case
-from app.models import InventoryTxn, Material
-from app.schemas import MaterialScanRequest, InventoryTxnResponse, BaseSchema
+# ✅ 1. 务必引入 cast 和 String
+from sqlalchemy import select, update, delete, func, case, and_, cast, String
+
+# 引入 User, BOMItem 模型和安全依赖
 from app.database import get_db
-from typing import List
-from pydantic import BaseModel
+from app.models import InventoryTxn, Material, User, BOMItem 
+from app.schemas import (
+    MaterialScanRequest, 
+    InventoryTxnResponse, 
+    MaterialCreate,
+    MaterialUpdate,      
+    MaterialDetailsDTO   
+)
+from app.security import get_current_active_user 
 
-router = APIRouter(prefix="/inventory", tags=["库存管理(Inventory)"])
+router = APIRouter(
+    prefix="/inventory", 
+    tags=["库存管理"]
+)
 
-# 引入 or_ 用于逻辑判断，或者直接用 in_
-from sqlalchemy import or_
+# ----------------------------------------------------------------------
+# 辅助函数：计算实时库存
+# ----------------------------------------------------------------------
 
-@router.post("/scan", response_model=InventoryTxnResponse, summary="工人扫码录入接口")
+async def calculate_current_stock(db: AsyncSession, material_id: int) -> float:
+    """根据交易记录计算某个物料的实时库存量。"""
+    
+    # ✅ 2. 核心修复：使用 cast(..., String) 强制转为字符串对比，防止 500 错误
+    qty_calc = case(
+        (cast(InventoryTxn.txn_type, String).in_(['IN', 'ADJ', 'REWORK']), InventoryTxn.qty),
+        (cast(InventoryTxn.txn_type, String).in_(['OUT', 'SCRAP']), -InventoryTxn.qty),
+        else_=0
+    )
+    
+    stmt_stock = select(func.sum(qty_calc)).where(InventoryTxn.material_id == material_id)
+    result_stock = await db.execute(stmt_stock)
+    
+    total = result_stock.scalar()
+    return total if total is not None else 0.0
+
+# ----------------------------------------------------------------------
+# 物料主数据 (Material Master Data) CRUD
+# ----------------------------------------------------------------------
+
+# 1. 创建物料 (Create)
+@router.post(
+    "/material", 
+    response_model=MaterialDetailsDTO, 
+    status_code=status.HTTP_201_CREATED, 
+    summary="[认证] 创建新物料"
+)
+async def create_material(
+    item: MaterialCreate, 
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)] 
+):
+    new_material = Material(**item.model_dump())
+    db.add(new_material)
+    await db.commit()
+    await db.refresh(new_material)
+    
+    return MaterialDetailsDTO(
+        id=new_material.id,
+        name=new_material.name,
+        spec=new_material.spec,
+        std_cost=new_material.std_cost,
+        current_stock=0.0
+    )
+
+# 2. 获取单个物料详情 (Read One)
+@router.get(
+    "/material/{material_id}", 
+    response_model=MaterialDetailsDTO, 
+    summary="[认证] 获取单个物料详情（含实时库存）"
+)
+async def get_material_by_id(
+    material_id: int, 
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)] 
+):
+    material = await db.get(Material, material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="找不到该物料")
+
+    current_stock = await calculate_current_stock(db, material_id)
+    
+    return MaterialDetailsDTO(
+        id=material.id,
+        name=material.name,
+        spec=material.spec,
+        std_cost=material.std_cost,
+        current_stock=current_stock
+    )
+
+# 3. 修改物料信息 (Update)
+@router.put(
+    "/material/{material_id}", 
+    response_model=MaterialDetailsDTO, 
+    summary="[认证] 修改物料信息"
+)
+async def update_material(
+    material_id: int, 
+    item: MaterialUpdate, 
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)] 
+):
+    material = await db.get(Material, material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="找不到该物料")
+
+    update_data = item.model_dump(exclude_unset=True) 
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="未提供任何更新数据")
+
+    stmt = update(Material).where(Material.id == material_id).values(**update_data)
+    await db.execute(stmt)
+    await db.commit()
+    await db.refresh(material) 
+
+    current_stock = await calculate_current_stock(db, material_id)
+    
+    return MaterialDetailsDTO(
+        id=material.id,
+        name=material.name,
+        spec=material.spec,
+        std_cost=material.std_cost,
+        current_stock=current_stock
+    )
+
+# 4. 删除物料 (Delete)
+@router.delete(
+    "/material/{material_id}", 
+    status_code=status.HTTP_204_NO_CONTENT, 
+    summary="[认证] 删除物料"
+)
+async def delete_material(
+    material_id: int, 
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)] 
+):
+    # 1. 检查是否有库存交易记录关联
+    txn_count = await db.scalar(
+        select(func.count()).select_from(InventoryTxn).where(InventoryTxn.material_id == material_id)
+    )
+    if txn_count and txn_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"物料ID {material_id} 存在 {txn_count} 条库存交易记录，禁止删除。"
+        )
+
+    # 2. 检查是否有 BOM 关联
+    bom_count = await db.scalar(
+        select(func.count()).select_from(BOMItem).where(BOMItem.material_id == material_id)
+    )
+    if bom_count and bom_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"物料ID {material_id} 被 {bom_count} 个 BOM 所引用，禁止删除。"
+        )
+        
+    # 3. 执行删除
+    stmt = delete(Material).where(Material.id == material_id)
+    result = await db.execute(stmt)
+    
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="找不到该物料")
+        
+    await db.commit()
+
+# 5. 获取所有物料 (Read All)
+@router.get(
+    "/material", 
+    response_model=List[MaterialDetailsDTO], 
+    summary="[认证] 获取所有物料列表（含实时库存）"
+)
+async def get_all_materials(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)] 
+):
+    stmt = select(Material)
+    result = await db.execute(stmt)
+    materials = result.scalars().all()
+
+    response_list = []
+    for material in materials:
+        current_stock = await calculate_current_stock(db, material.id)
+        response_list.append(MaterialDetailsDTO(
+            id=material.id,
+            name=material.name,
+            spec=material.spec,
+            std_cost=material.std_cost,
+            current_stock=current_stock
+        ))
+        
+    return response_list
+
+
+# ----------------------------------------------------------------------
+# 库存交易 (Inventory Transactions)
+# ----------------------------------------------------------------------
+
+# 6. 物料扫码交易 (Scan)
+@router.post(
+    "/scan", 
+    response_model=InventoryTxnResponse, 
+    summary="[认证] 执行物料 IN/OUT/ADJ/SCRAP/REWORK 扫码交易"
+)
 async def scan_material(
     request: MaterialScanRequest, 
-    db: AsyncSession = Depends(get_db)
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)] 
 ):
-    """
-    处理工人扫码：
-    1. 校验物料是否存在
-    2. 🛡️ [新增] 检查库存是否充足 (针对 OUT/SCRAP)
-    3. 记录流水
-    4. 实时计算当前库存
-    """
+    
     # 1. 检查物料是否存在
     material = await db.get(Material, request.material_id)
     if not material:
@@ -34,9 +225,10 @@ async def scan_material(
         # 先查询历史库存总和
         stmt_check = select(func.sum(
             case(
-                # IN 和 ADJ(假设是盘盈) 为正，OUT 和 SCRAP 为负
-                (InventoryTxn.txn_type.in_(['OUT', 'SCRAP']), -InventoryTxn.qty), 
-                else_=InventoryTxn.qty
+                # ✅ 3. 这里的检查逻辑也要加上 cast 防止报错
+                (cast(InventoryTxn.txn_type, String).in_(['OUT', 'SCRAP']), -InventoryTxn.qty), 
+                (cast(InventoryTxn.txn_type, String).in_(['IN', 'ADJ', 'REWORK']), InventoryTxn.qty),
+                else_=0
             )
         )).where(InventoryTxn.material_id == request.material_id)
         
@@ -52,7 +244,8 @@ async def scan_material(
         material_id=request.material_id,
         txn_type=request.txn_type,
         qty=request.qty,
-        wo_id=request.wo_id
+        wo_id=request.wo_id,
+        user_id=current_user.id 
     )
     db.add(new_txn)
     
@@ -60,18 +253,8 @@ async def scan_material(
     await db.commit()
     await db.refresh(new_txn)
 
-    # 5. 计算当前总库存 (核心修正部分)
-    # 逻辑更新：OUT 和 SCRAP 都是负数
-    stmt = select(func.sum(
-        case(
-            # ✅ 修复点：只要是 OUT 或者 SCRAP，都要乘 -1
-            (InventoryTxn.txn_type.in_(['OUT', 'SCRAP']), -InventoryTxn.qty), 
-            else_=InventoryTxn.qty                                
-        )
-    )).where(InventoryTxn.material_id == request.material_id)
-    
-    result = await db.execute(stmt)
-    current_stock = result.scalar() or 0.0
+    # 5. 计算当前总库存
+    current_stock = await calculate_current_stock(db, request.material_id)
 
     # 6. 返回结果
     return InventoryTxnResponse(
@@ -85,70 +268,14 @@ async def scan_material(
         created_at=new_txn.created_at
     )
 
-class MaterialCreate(BaseSchema):
-    name: str
-    spec: str = "默认规格"
-    std_cost: float = 0.0
-
-@router.post("/material", summary="[管理员] 创建新物料")
-async def create_material(item: MaterialCreate, db: AsyncSession = Depends(get_db)):
-    new_mat = Material(name=item.name, spec=item.spec, std_cost=item.std_cost)
-    db.add(new_mat)
-    await db.commit()
-    await db.refresh(new_mat)
-    return new_mat
-
-# 定义返回给前端的数据结构
-class InventoryStatusDTO(BaseModel):
-    material_id: int
-    name: str
-    spec: str | None
-    onhand: float
-
-# 引入需要的库
-from sqlalchemy import case, func, select
-
-@router.get("/status", response_model=List[InventoryStatusDTO], summary="[BI] 实时库存查询")
-async def get_inventory_status(db: AsyncSession = Depends(get_db)):
-    """
-    对应前端红色按钮“查库存”：
-    使用 SQL 聚合计算：Sum(IN) + Sum(ADJ) - Sum(OUT) - Sum(SCRAP)
-    """
-    # 1. 构造计算逻辑 (Case When)
-    # ✅ 修复点：增加了 SCRAP 的判断，并且它是负数（扣减）
-    qty_calc = case(
-        (InventoryTxn.txn_type == 'IN', InventoryTxn.qty),
-        (InventoryTxn.txn_type == 'ADJ', InventoryTxn.qty), 
-        (InventoryTxn.txn_type == 'OUT', -InventoryTxn.qty),
-        (InventoryTxn.txn_type == 'SCRAP', -InventoryTxn.qty), # <--- 这一行必须加！
-        else_=0
-    )
-
-    # 2. 构造查询语句 (Select)
-    # 逻辑：Material 表左连接 InventoryTxn 表，然后按物料分组求和
-    stmt = (
-        select(
-            Material.id,
-            Material.name,
-            Material.spec,
-            func.sum(qty_calc).label("onhand")
-        )
-        .outerjoin(InventoryTxn, Material.id == InventoryTxn.material_id)
-        .group_by(Material.id, Material.name, Material.spec)
-    )
-
-    # 3. 执行异步查询
-    result = await db.execute(stmt)
-    rows = result.all()
-
-    # 4. 格式化返回
-    return [
-        InventoryStatusDTO(
-            material_id=row.id,
-            name=row.name,
-            spec=row.spec,
-            # 如果没有交易记录，sum 结果可能是 None，转为 0.0
-            onhand=float(row.onhand) if row.onhand is not None else 0.0
-        )
-        for row in rows
-    ]
+# 7. 实时库存查询 (Status)
+@router.get(
+    "/status", 
+    response_model=List[MaterialDetailsDTO], 
+    summary="[认证] 查询所有物料的实时库存状态"
+)
+async def get_inventory_status(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)] 
+):
+    return await get_all_materials(db, current_user)

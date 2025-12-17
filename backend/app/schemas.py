@@ -5,21 +5,45 @@ from enum import Enum
 
 # --- 基础配置 ---
 class BaseSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True) 
+    model_config = ConfigDict(from_attributes=True)
 
-# --- 1. 物料扫描请求 (关键修复) ---
+# --- Material Schemas (物料管理) ---
+
+class MaterialCreate(BaseSchema):
+    """用于创建新物料时接收的数据"""
+    name: str = Field(..., description="物料名称")
+    spec: str = Field("默认规格", description="规格型号")
+    std_cost: float = Field(0.0, description="标准成本")
+
+class MaterialUpdate(BaseSchema):
+    """用于更新物料时接收的数据 (所有字段可选)"""
+    name: str | None = Field(None, description="物料名称")
+    spec: str | None = Field(None, description="规格型号")
+    std_cost: float | None = Field(None, description="标准成本")
+
+class MaterialResponse(BaseSchema):
+    """用于返回完整的物料信息给前端，包括实时库存"""
+    id: int
+    name: str
+    spec: str
+    std_cost: float
+    # 实时库存字段，由后端路由计算并附加
+    current_stock: float = Field(0.0, description="当前实时库存量")
+
+# ✅ 关键修复：添加别名，解决 inventory.py 中的 ImportError
+MaterialDetailsDTO = MaterialResponse
+
 class MaterialScanRequest(BaseSchema):
     material_id: int = Field(..., description="物料ID")
-    # ✅ 修复点：这里补上了 'SCRAP'
     txn_type: Literal['IN', 'OUT', 'ADJ', 'SCRAP', 'REWORK'] = Field(..., description="操作类型")
     qty: float = Field(..., gt=0, description="数量")
     wo_id: Optional[int] = Field(None, description="关联工单ID")
 
-# --- 2. 响应数据 ---
+# --- Inventory Schemas (库存交易) ---
 class InventoryTxnResponse(BaseSchema):
     id: int
     material_id: int | None = None
-    material_name: str | None = None   
+    material_name: str | None = None    
     txn_type: str
     qty: float
     wo_id: int | None = None
@@ -153,7 +177,7 @@ class UserResponse(BaseSchema):
 class Token(BaseSchema):
     access_token: str
     token_type: str
-    role: str      
+    role: str       
     username: str
     
 # --- Step Schemas ---
@@ -173,7 +197,7 @@ class WorkOrderResponse(BaseSchema):
     id: int
     project_id: int
     project_name: str | None
-    status: WOStatus   
+    status: WOStatus    
     wo_type: str = "STANDARD"  # 告诉前端这是普通单还是返工单
     parent_id: int | None = None # 如果是返工单，显示它的父级ID
     qty: int = 1 
